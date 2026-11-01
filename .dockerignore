@@ -1,0 +1,8 @@
+.dart_tool
+.idea
+.git
+.flutter-plugins-dependencies
+build
+coverage
+android
+ios
