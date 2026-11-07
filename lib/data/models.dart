@@ -148,14 +148,49 @@ class Appointment {
   );
 }
 
-class AssistantMessage {
-  const AssistantMessage(this.role, this.content);
+/// Un des 8 contacts prénatals recommandés par l'OMS (calculé par l'API).
+class CpnContact {
+  const CpnContact({required this.number, required this.targetWeek, required this.status, this.targetDate});
+  final int number;
+  final int targetWeek;
+  /// REALISE, PLANIFIE, EN_RETARD ou A_VENIR.
+  final String status;
+  final DateTime? targetDate;
 
-  final String role;
-  final String content;
-
-  Map<String, String> toJson() => {'role': role, 'content': content};
+  factory CpnContact.fromJson(Map<String, dynamic> json) => CpnContact(
+    number: (json['numero'] as num).toInt(),
+    targetWeek: (json['semaineCible'] as num).toInt(),
+    status: json['statut'] as String? ?? 'A_VENIR',
+    targetDate: _date(json['dateCible']),
+  );
 }
+
+class CpnPlan {
+  const CpnPlan({required this.contacts, required this.done, required this.late, this.reference});
+  final List<CpnContact> contacts;
+  final int done;
+  final int late;
+  final String? reference;
+
+  factory CpnPlan.fromJson(Map<String, dynamic> json) => CpnPlan(
+    contacts: (json['contacts'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(CpnContact.fromJson)
+        .toList(),
+    done: (json['nombreRealises'] as num?)?.toInt() ?? 0,
+    late: (json['nombreEnRetard'] as num?)?.toInt() ?? 0,
+    reference: json['reference'] as String?,
+  );
+}
+
+/// Libellé du trimestre renvoyé par l'API (T1, T2, T3).
+String trimesterLabel(String? value) => switch (value) {
+  'T1' => '1er trimestre',
+  'T2' => '2e trimestre',
+  'T3' => '3e trimestre',
+  null || '' => 'Suivi prénatal',
+  _ => value,
+};
 
 DateTime? _date(Object? value) {
   if (value is! String || value.isEmpty) return null;

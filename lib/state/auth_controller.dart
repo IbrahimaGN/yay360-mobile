@@ -1,10 +1,15 @@
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../data/api_client.dart';
 import '../data/models.dart';
 
 class AuthController extends ChangeNotifier {
-  late final ApiClient api = ApiClient(onUnauthorized: _sessionExpired);
+  /// [client] : client HTTP de remplacement (tests). Par défaut, le vrai réseau.
+  AuthController({this.client});
+
+  final http.Client? client;
+  late final ApiClient api = ApiClient(client: client, onUnauthorized: _sessionExpired);
 
   UserSession? session;
   bool isRestoring = true;

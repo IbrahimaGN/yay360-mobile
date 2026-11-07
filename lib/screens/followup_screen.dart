@@ -2,21 +2,29 @@ import 'package:flutter/material.dart';
 
 import '../data/api_client.dart';
 import '../data/models.dart';
+import '../state/auth_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/symptom_sheet.dart';
 
+/// Suivi prénatal : repères de la semaine, signalement d'un symptôme et historique des signalements.
 class FollowupScreen extends StatefulWidget {
-  const FollowupScreen({super.key, required this.api});
-  final ApiClient api;
+  const FollowupScreen({super.key, required this.auth});
+  final AuthController auth;
 
   @override
   State<FollowupScreen> createState() => _FollowupScreenState();
 }
 
 class _FollowupScreenState extends State<FollowupScreen> {
+  Pregnancy? _pregnancy;
   WeeklyFollowup? _followup;
+  List<Map<String, dynamic>> _alertes = [];
   bool _loading = true;
   String? _error;
+
+  ApiClient get _api => widget.auth.api;
+  bool get _estFemme => widget.auth.session?.role == 'FEMME_ENCEINTE';
 
   @override
   void initState() {
@@ -30,283 +38,392 @@ class _FollowupScreenState extends State<FollowupScreen> {
       _error = null;
     });
     try {
-      _followup = WeeklyFollowup.fromJson(
-        await widget.api.get('/grossesses/mon-suivi'),
-      );
+      _pregnancy = Pregnancy.fromJson(await _api.get('/grossesses/ma-grossesse'));
+      _followup = WeeklyFollowup.fromJson(await _api.get('/grossesses/mon-suivi'));
     } on ApiException catch (exception) {
-      _error = exception.message;
+      // 404 : aucune grossesse en cours, ce n'est pas une erreur
+      if (exception.statusCode != 404) _error = exception.message;
+      if (_pregnancy == null) _followup = null;
     }
+    await _chargerAlertes();
     if (mounted) setState(() => _loading = false);
   }
 
+  Future<void> _chargerAlertes() async {
+    try {
+      _alertes = (await _api.getList('/alertes/mes-alertes')).whereType<Map<String, dynamic>>().toList();
+    } on ApiException {
+      _alertes = [];
+    }
+  }
+
+  Future<void> _signaler() async {
+    final grossesse = _pregnancy;
+    if (grossesse == null) return;
+    final envoye = await reportSymptom(context, api: _api, pregnancyId: grossesse.id);
+    if (envoye) {
+      await _chargerAlertes();
+      if (mounted) setState(() {});
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => RefreshIndicator(
-    onRefresh: _load,
-    child: ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
-      children: [
-        Text(
-          'Mon suivi',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: context.yayInk,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          'Des repères pour vivre chaque étape avec confiance.',
-          style: TextStyle(color: context.yayMuted),
-        ),
-        const SizedBox(height: 20),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.all(40),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (_error != null)
-          MessagePanel(
-            icon: Icons.info_outline,
-            title: 'Suivi indisponible',
-            message: _error!,
-            action: 'Réessayer',
-            onAction: _load,
-          )
-        else if (_followup == null)
-          const MessagePanel(
-            icon: Icons.favorite_outline,
-            title: 'Aucun suivi en cours',
-            message:
-                'Déclarez votre grossesse depuis l’accueil pour voir les repères hebdomadaires.',
-          )
-        else ...[
-          _WeekHeader(followup: _followup!),
-          if (_followup!.babyDevelopment != null)
-            _FollowupCard(
-              icon: Icons.child_care_outlined,
-              title: 'Le développement de bébé',
-              content: _followup!.babyDevelopment!,
-              color: context.yayRoseContainer,
-              iconColor: YayColors.rose,
-            ),
-          if (_followup!.motherChanges != null)
-            _FollowupCard(
-              icon: Icons.spa_outlined,
-              title: 'Les changements de votre corps',
-              content: _followup!.motherChanges!,
-              color: context.yayTealContainer,
-              iconColor: YayColors.green,
-            ),
-          if (_followup!.healthGoals != null)
-            _FollowupCard(
-              icon: Icons.checklist_outlined,
-              title: 'Vos objectifs santé',
-              content: _followup!.healthGoals!,
-              color: context.yayWarningContainer,
-              iconColor: const Color(0xFFB68737),
-            ),
-          if (_followup!.foodAdvice != null)
-            _FollowupCard(
-              icon: Icons.restaurant_outlined,
-              title: 'Alimentation',
-              content: _followup!.foodAdvice!,
-              color: context.yayWarningContainer,
-              iconColor: const Color(0xFFB68737),
-            ),
-          if (_followup!.hydrationAdvice != null)
-            _FollowupCard(
-              icon: Icons.water_drop_outlined,
-              title: 'Hydratation',
-              content: _followup!.hydrationAdvice!,
-              color: context.yayTealContainer,
-              iconColor: YayColors.green,
-            ),
-          if (_followup!.exercise != null)
-            _FollowupCard(
-              icon: Icons.directions_walk_outlined,
-              title: 'Activité physique',
-              content: _followup!.exercise!,
-              color: context.yayRoseContainer,
-              iconColor: YayColors.rose,
-            ),
-          if (_followup!.sleepAdvice != null)
-            _FollowupCard(
-              icon: Icons.bedtime_outlined,
-              title: 'Sommeil',
-              content: _followup!.sleepAdvice!,
-              color: context.yayTealContainer,
-              iconColor: YayColors.green,
-            ),
-          if (_followup!.precautions != null)
-            _FollowupCard(
-              icon: Icons.health_and_safety_outlined,
-              title: 'Précautions',
-              content: _followup!.precautions!,
-              color: context.yayWarningContainer,
-              iconColor: const Color(0xFFB68737),
-            ),
-          if (_followup!.warningSigns != null)
-            _FollowupCard(
-              icon: Icons.warning_amber_rounded,
-              title: 'Signes à surveiller',
-              content: _followup!.warningSigns!,
-              color: context.yayRoseContainer,
-              iconColor: YayColors.roseDark,
-            ),
-          ContentCard(
-            child: Row(
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final f = _followup;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+        children: [
+          Text(_estFemme ? 'Mon suivi' : 'Suivi prénatal',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: p.textMain)),
+          const SizedBox(height: 2),
+          Text('Des repères pour vivre chaque étape avec confiance.', style: TextStyle(color: p.textMuted, fontSize: 14)),
+          const SizedBox(height: 18),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement du suivi')),
+            )
+          else if (_error != null)
+            MessagePanel(
+              icon: Icons.cloud_off_outlined,
+              title: 'Suivi indisponible',
+              message: _error!,
+              action: 'Réessayer',
+              onAction: _load,
+            )
+          else if (_pregnancy == null)
+            MessagePanel(
+              icon: Icons.favorite_outline,
+              title: 'Aucun suivi en cours',
+              message: _estFemme
+                  ? 'Déclarez votre grossesse depuis l’accueil pour voir les repères de chaque semaine.'
+                  : 'Les repères s’afficheront dès que la future maman aura déclaré sa grossesse.',
+            )
+          else ...[
+            _EnteteSemaine(pregnancy: _pregnancy!, followup: f),
+            const SizedBox(height: 12),
+            _CarteSignaler(onTap: _signaler),
+            if (f != null) ...[
+              _Groupe(titre: 'Cette semaine', fiches: [
+                _Fiche(Icons.child_care_outlined, 'Le développement du bébé', f.babyDevelopment, _Ton.teal),
+                _Fiche(Icons.spa_outlined, _estFemme ? 'Les changements de votre corps' : 'Les changements chez la maman',
+                    f.motherChanges, _Ton.orange),
+                _Fiche(Icons.flag_outlined, 'Vos objectifs santé', f.healthGoals, _Ton.lilas),
+              ]),
+              _Groupe(titre: 'Au quotidien', fiches: [
+                _Fiche(Icons.restaurant_outlined, 'Alimentation', f.foodAdvice, _Ton.orange),
+                _Fiche(Icons.water_drop_outlined, 'Hydratation', f.hydrationAdvice, _Ton.teal),
+                _Fiche(Icons.directions_walk_outlined, 'Activité physique', f.exercise, _Ton.lilas),
+                _Fiche(Icons.bedtime_outlined, 'Sommeil', f.sleepAdvice, _Ton.teal),
+              ]),
+              _Groupe(titre: 'Vigilance', fiches: [
+                _Fiche(Icons.health_and_safety_outlined, 'Précautions', f.precautions, _Ton.orange),
+                _Fiche(Icons.warning_amber_rounded, 'Signes à surveiller', f.warningSigns, _Ton.danger),
+              ]),
+            ],
+            SectionHeading(_estFemme ? 'Mes signalements' : 'Signalements'),
+            if (_alertes.isEmpty)
+              const MessagePanel(
+                icon: Icons.check_circle_outline,
+                title: 'Aucun signalement',
+                message: 'Les symptômes signalés et leur prise en charge apparaîtront ici.',
+              )
+            else
+              for (final a in _alertes.take(10)) ...[
+                _LigneSignalement(alerte: a),
+                const SizedBox(height: 8),
+              ],
+            const SizedBox(height: 10),
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.medical_information_outlined,
-                  color: Theme.of(context).colorScheme.secondary,
-                  size: 20,
-                ),
-                SizedBox(width: 11),
+                Icon(Icons.info_outline, size: 16, color: p.textMuted),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Ces informations sont générales et ne remplacent jamais l’avis d’un professionnel de santé.',
-                    style: TextStyle(
-                      color: context.yayMuted,
-                      fontSize: 12,
-                      height: 1.55,
-                    ),
+                    f?.warning?.isNotEmpty == true
+                        ? f!.warning!
+                        : 'Ces informations sont générales et ne remplacent jamais l’avis d’un professionnel de santé.',
+                    style: TextStyle(color: p.textMuted, fontSize: 12, height: 1.5),
                   ),
                 ),
               ],
             ),
-          ),
+          ],
         ],
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
-class _WeekHeader extends StatelessWidget {
-  const _WeekHeader({required this.followup});
-  final WeeklyFollowup followup;
+// ==================== En-tête de la semaine ====================
+
+class _EnteteSemaine extends StatelessWidget {
+  const _EnteteSemaine({required this.pregnancy, required this.followup});
+  final Pregnancy pregnancy;
+  final WeeklyFollowup? followup;
 
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(18),
-      color: YayColors.green,
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .12),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              '${followup.week ?? '—'}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 25,
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final semaine = followup?.week ?? pregnancy.week ?? 0;
+    final terme = followup?.dueDate ?? pregnancy.dueDate;
+    final fin = Color.lerp(p.banner1, Colors.black, 0.25)!;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(colors: [p.banner1, fin], begin: Alignment.topLeft, end: Alignment.bottomRight),
+      ),
+      child: Row(
+        children: [
+          Semantics(
+            label: 'Semaine $semaine',
+            excludeSemantics: true,
+            child: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.45), width: 1.5),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('$semaine', style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w600, height: 1)),
+                  const Text('SA', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500)),
+                ],
               ),
             ),
           ),
-        ),
-        const SizedBox(width: 15),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'SEMAINE DE GROSSESSE',
-                style: TextStyle(
-                  color: Color(0xFFE9AFB9),
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: .8,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                followup.trimester ?? 'Votre semaine',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17,
-                ),
-              ),
-              if (followup.dueDate != null)
-                Text(
-                  'Date prévue : ${frenchDate(followup.dueDate)}',
-                  style: const TextStyle(
-                    color: Color(0xFFD6E4DA),
-                    fontSize: 11,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _FollowupCard extends StatelessWidget {
-  const _FollowupCard({
-    required this.icon,
-    required this.title,
-    required this.content,
-    required this.color,
-    required this.iconColor,
-  });
-  final IconData icon;
-  final String title;
-  final String content;
-  final Color color;
-  final Color iconColor;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 11),
-    child: ContentCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(icon, color: iconColor, size: 19),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    color: context.yayInk,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            content,
-            style: TextStyle(
-              color: context.yayMuted,
-              fontSize: 13,
-              height: 1.6,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Semaine $semaine', style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w600)),
+                Text(trimesterLabel(followup?.trimester ?? pregnancy.trimester),
+                    style: const TextStyle(color: Colors.white, fontSize: 14)),
+                if (terme != null)
+                  Text('Terme prévu : ${frenchDate(terme)}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                if (pregnancy.atRisk) ...[
+                  const SizedBox(height: 6),
+                  StatusPill('Suivi renforcé', background: p.orange, foreground: p.onAccent, icon: Icons.shield_outlined),
+                ],
+              ],
             ),
           ),
         ],
       ),
-    ),
-  );
+    );
+  }
+}
+
+class _CarteSignaler extends StatelessWidget {
+  const _CarteSignaler({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: p.dangerSoft,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: p.dangerLine, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: p.danger),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Un symptôme inhabituel ?',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: p.textMain)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('Signalez-le : il est classé par des règles validées et transmis à votre équipe de santé.',
+              style: TextStyle(fontSize: 13, color: p.textMuted, height: 1.45)),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: p.dangerStrong,
+              foregroundColor: p.onStrong,
+              side: BorderSide(color: p.dangerStrong, width: 1.5),
+              minimumSize: const Size(64, 46),
+            ),
+            onPressed: onTap,
+            icon: const Icon(Icons.add_alert_outlined, size: 18),
+            label: const Text('Signaler un symptôme'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== Fiches de la semaine ====================
+
+enum _Ton { teal, orange, lilas, danger }
+
+class _Fiche {
+  const _Fiche(this.icone, this.titre, this.contenu, this.ton);
+  final IconData icone;
+  final String titre;
+  final String? contenu;
+  final _Ton ton;
+}
+
+class _Groupe extends StatelessWidget {
+  const _Groupe({required this.titre, required this.fiches});
+  final String titre;
+  final List<_Fiche> fiches;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibles = fiches.where((f) => f.contenu?.trim().isNotEmpty == true).toList();
+    if (visibles.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeading(titre),
+        for (final (i, f) in visibles.indexed) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _CarteFiche(fiche: f),
+        ],
+      ],
+    );
+  }
+}
+
+class _CarteFiche extends StatelessWidget {
+  const _CarteFiche({required this.fiche});
+  final _Fiche fiche;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final (fond, couleur) = switch (fiche.ton) {
+      _Ton.teal => (p.tealSoft, p.tealInk),
+      _Ton.orange => (p.orangeSoft, p.orangeInk),
+      _Ton.lilas => (p.lilacSoft, p.lilacInk),
+      _Ton.danger => (p.dangerSoft, p.danger),
+    };
+    final danger = fiche.ton == _Ton.danger;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: danger ? p.dangerSoft : p.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: danger ? p.dangerLine : p.borderLight, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(color: danger ? p.surface : fond, borderRadius: BorderRadius.circular(12)),
+            child: Icon(fiche.icone, size: 20, color: couleur),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(fiche.titre, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: p.textMain)),
+                const SizedBox(height: 4),
+                Text(fiche.contenu!, style: TextStyle(fontSize: 14, color: p.textMuted, height: 1.55)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== Signalements ====================
+
+class _LigneSignalement extends StatelessWidget {
+  const _LigneSignalement({required this.alerte});
+  final Map<String, dynamic> alerte;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final niveau = alerte['niveauGravite'] as String?;
+    final type = alerte['typeSymptome'] as String? ?? 'AUTRE';
+    final libelle = type == 'CONSTANTES_ANORMALES'
+        ? 'Constantes anormales (consultation)'
+        : symptomes[type] ?? 'Autre symptôme';
+    final date = DateTime.tryParse(alerte['dateDeclaration'] as String? ?? '');
+    final (fondIcone, couleurIcone) = switch (niveau) {
+      'URGENT' => (p.dangerSoft, p.danger),
+      'ELEVE' => (p.warningSoft, p.warning),
+      _ => (p.tealSoft, p.tealInk),
+    };
+    final (statut, fondStatut, texteStatut) = switch (alerte['statut'] as String?) {
+      'RESOLUE' => ('Résolue', p.successSoft, p.success),
+      'PRISE_EN_CHARGE' => ('Prise en charge', p.tealSoft, p.tealInk),
+      _ => ('Nouvelle', p.orangeSoft, p.orangeInk),
+    };
+    return Semantics(
+      button: true,
+      label: '$libelle, niveau ${niveauLabel(niveau)}, $statut',
+      excludeSemantics: true,
+      child: Material(
+        color: p.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: p.borderLight, width: 1.5),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => showDialog<void>(context: context, builder: (_) => TriageDialog(alerte: alerte)),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(color: fondIcone, borderRadius: BorderRadius.circular(12)),
+                  child: Icon(Icons.warning_amber_rounded, color: couleurIcone, size: 21),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(libelle, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: p.textMain)),
+                      Text(
+                        [
+                          if (niveau != null) 'Niveau ${niveauLabel(niveau).toLowerCase()}',
+                          if (date != null) frenchDate(date),
+                        ].join(' · '),
+                        style: TextStyle(fontSize: 12, color: p.textMuted),
+                      ),
+                      const SizedBox(height: 6),
+                      StatusPill(statut, background: fondStatut, foreground: texteStatut),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: p.textMuted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

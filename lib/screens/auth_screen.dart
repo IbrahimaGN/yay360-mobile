@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../state/auth_controller.dart';
 import '../theme.dart';
+import '../widgets/common.dart';
 
+/// Connexion, inscription de la patiente et accès au compte conjoint (sur invitation).
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, required this.auth, this.onToggleTheme});
 
@@ -43,7 +45,7 @@ class _AuthScreenState extends State<AuthScreen> {
             'nom': _lastName.text.trim(),
             'email': _email.text.trim(),
             'password': _password.text,
-            'telephone': _normalizePhone(_phone.text),
+            'telephone': normalizePhone(_phone.text),
             'dateNaissance': _dateOfBirth.text,
             'role': 'FEMME_ENCEINTE',
           })
@@ -63,10 +65,7 @@ class _AuthScreenState extends State<AuthScreen> {
       helpText: 'Votre date de naissance',
     );
     if (date != null) {
-      _dateOfBirth.text =
-          '${date.year.toString().padLeft(4, '0')}-'
-          '${date.month.toString().padLeft(2, '0')}-'
-          '${date.day.toString().padLeft(2, '0')}';
+      _dateOfBirth.text = isoDate(date);
       setState(() {});
     }
   }
@@ -75,263 +74,209 @@ class _AuthScreenState extends State<AuthScreen> {
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (_) => _PartnerInvitationSheet(auth: widget.auth),
     );
     if (result == true && mounted) setState(() {});
   }
 
+  void _changerMode(bool inscription) => setState(() {
+    _registerMode = inscription;
+    widget.auth.error = null;
+  });
+
   @override
   Widget build(BuildContext context) {
+    final p = context.yay;
+    final sombre = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(22, 20, 22, 28 + bottomInset),
+            padding: EdgeInsets.fromLTRB(20, 12, 20, 28 + bottomInset),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 480),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 8),
+                  // ── En-tête ────────────────────────────────────────────
                   Row(
                     children: [
-                      Expanded(child: _Brand()),
+                      const Expanded(child: Align(alignment: Alignment.centerLeft, child: YayBrand())),
                       IconButton(
-                        tooltip: Theme.of(context).brightness == Brightness.dark
-                            ? 'Activer le thème clair'
-                            : 'Activer le thème sombre',
+                        tooltip: sombre ? 'Activer le thème clair' : 'Activer le thème sombre',
                         onPressed: widget.onToggleTheme,
-                        icon: Icon(
-                          Theme.of(context).brightness == Brightness.dark
-                              ? Icons.light_mode_outlined
-                              : Icons.dark_mode_outlined,
-                        ),
+                        icon: Icon(sombre ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 18),
+                  const _Hero(),
+                  const SizedBox(height: 18),
+
+                  // ── Carte du formulaire ───────────────────────────────
                   Container(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
-                      gradient: const LinearGradient(
-                        colors: [YayColors.green, Color(0xFF1E3F32)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      color: p.surface,
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: p.borderLight, width: 1.5),
                     ),
-                    padding: const EdgeInsets.all(24),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _Eyebrow(text: 'À VOS CÔTÉS, À CHAQUE ÉTAPE'),
-                        SizedBox(height: 14),
-                        Text(
-                          'Votre grossesse,\naccompagnée avec soin.',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 27,
-                            fontWeight: FontWeight.w700,
-                            height: 1.16,
-                            letterSpacing: -0.5,
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ModeTabs(
+                            inscription: _registerMode,
+                            onChanged: _changerMode,
                           ),
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          'Des repères utiles, un suivi organisé et vos proches à vos côtés.',
-                          style: TextStyle(
-                            color: Color(0xFFD6E4DA),
-                            height: 1.55,
+                          const SizedBox(height: 18),
+                          Text(
+                            _registerMode ? 'Créez votre espace' : 'Accédez à votre espace',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: p.textMain),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _ModeButton(
-                          title: 'Connexion',
-                          selected: !_registerMode,
-                          onTap: () => setState(() {
-                            _registerMode = false;
-                            widget.auth.error = null;
-                          }),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _ModeButton(
-                          title: 'Inscription',
-                          selected: _registerMode,
-                          onTap: () => setState(() {
-                            _registerMode = true;
-                            widget.auth.error = null;
-                          }),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_registerMode) ...[
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _textField(
-                                  _firstName,
-                                  'Prénom',
-                                  'Fatou',
-                                ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _registerMode
+                                ? 'Future maman : suivez votre grossesse et vos rendez-vous.'
+                                : 'Avec l’adresse e-mail de votre compte.',
+                            style: TextStyle(fontSize: 13, color: p.textMuted, height: 1.45),
+                          ),
+                          const SizedBox(height: 18),
+                          if (_registerMode) ...[
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: _nameField(_firstName, 'Prénom', 'Fatou')),
+                                const SizedBox(width: 10),
+                                Expanded(child: _nameField(_lastName, 'Nom', 'Ndiaye')),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+                          TextFormField(
+                            controller: _email,
+                            keyboardType: TextInputType.emailAddress,
+                            autofillHints: const [AutofillHints.email],
+                            textInputAction: TextInputAction.next,
+                            validator: validateEmail,
+                            decoration: const InputDecoration(
+                              labelText: 'Adresse e-mail',
+                              hintText: 'nom@exemple.sn',
+                              prefixIcon: Icon(Icons.mail_outline),
+                            ),
+                          ),
+                          if (_registerMode) ...[
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _phone,
+                              keyboardType: TextInputType.phone,
+                              autofillHints: const [AutofillHints.telephoneNumber],
+                              validator: validatePhone,
+                              decoration: const InputDecoration(
+                                labelText: 'Téléphone',
+                                hintText: '+221 77 000 00 00',
+                                prefixIcon: Icon(Icons.phone_outlined),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _textField(_lastName, 'Nom', 'Ndiaye'),
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _dateOfBirth,
+                              readOnly: true,
+                              onTap: _pickBirthDate,
+                              validator: (value) => value == null || value.isEmpty
+                                  ? 'Choisissez votre date de naissance.'
+                                  : null,
+                              decoration: const InputDecoration(
+                                labelText: 'Date de naissance',
+                                hintText: 'AAAA-MM-JJ',
+                                prefixIcon: Icon(Icons.cake_outlined),
+                                suffixIcon: Icon(Icons.calendar_month_outlined),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                        _textField(
-                          _email,
-                          'Adresse e-mail',
-                          'vous@exemple.com',
-                          keyboardType: TextInputType.emailAddress,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Saisissez votre e-mail.';
-                            }
-                            if (!value.contains('@') || !value.contains('.')) {
-                              return 'Adresse e-mail invalide.';
-                            }
-                            return null;
-                          },
-                        ),
-                        if (_registerMode) ...[
-                          const SizedBox(height: 14),
-                          _textField(
-                            _phone,
-                            'Téléphone',
-                            '+221 77 000 00 00',
-                            keyboardType: TextInputType.phone,
-                            validator: _validatePhone,
-                          ),
+                            ),
+                          ],
                           const SizedBox(height: 14),
                           TextFormField(
-                            controller: _dateOfBirth,
-                            readOnly: true,
-                            onTap: _pickBirthDate,
-                            validator: (value) => value == null || value.isEmpty
-                                ? 'Choisissez votre date de naissance.'
-                                : null,
-                            decoration: const InputDecoration(
-                              labelText: 'Date de naissance',
-                              hintText: 'AAAA-MM-JJ',
-                              suffixIcon: Icon(Icons.calendar_month_outlined),
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _password,
-                          obscureText: _hidePassword,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Saisissez votre mot de passe.';
-                            }
-                            if (_registerMode &&
-                                (value.length < 6 ||
-                                    !RegExp(r'[A-Za-z]').hasMatch(value) ||
-                                    !RegExp(r'\d').hasMatch(value))) {
-                              return '6 caractères minimum, avec une lettre et un chiffre.';
-                            }
-                            return null;
-                          },
-                          decoration: InputDecoration(
-                            labelText: 'Mot de passe',
-                            hintText: _registerMode
-                                ? '6 caractères minimum'
-                                : 'Votre mot de passe',
-                            suffixIcon: IconButton(
-                              onPressed: () => setState(
-                                () => _hidePassword = !_hidePassword,
-                              ),
-                              icon: Icon(
-                                _hidePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
+                            controller: _password,
+                            obscureText: _hidePassword,
+                            autofillHints: [_registerMode ? AutofillHints.newPassword : AutofillHints.password],
+                            onFieldSubmitted: (_) => _submit(),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return 'Saisissez votre mot de passe.';
+                              if (_registerMode && !PasswordRules.valide(value)) return PasswordRules.aide;
+                              return null;
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Mot de passe',
+                              hintText: _registerMode ? '8 caractères minimum' : 'Votre mot de passe',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                tooltip: _hidePassword ? 'Afficher le mot de passe' : 'Masquer le mot de passe',
+                                style: IconButton.styleFrom(backgroundColor: Colors.transparent, side: BorderSide.none),
+                                onPressed: () => setState(() => _hidePassword = !_hidePassword),
+                                icon: Icon(_hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                               ),
                             ),
                           ),
-                        ),
-                        if (_registerMode) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            'En créant votre espace, vous pourrez suivre les étapes clés de votre grossesse et organiser vos rendez-vous.',
-                            style: TextStyle(
-                              color: context.yayMuted,
-                              fontSize: 12,
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
-                        if (widget.auth.error != null) ...[
-                          const SizedBox(height: 14),
-                          _ErrorBox(message: widget.auth.error!),
-                        ],
-                        const SizedBox(height: 20),
-                        FilledButton(
-                          onPressed: widget.auth.isSubmitting ? null : _submit,
-                          child: widget.auth.isSubmitting
-                              ? const SizedBox.square(
-                                  dimension: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
+                          if (_registerMode) ...[
+                            const SizedBox(height: 10),
+                            PasswordRules(controller: _password),
+                          ],
+                          if (widget.auth.error != null) ...[
+                            const SizedBox(height: 14),
+                            YayNotice(kind: NoticeKind.error, message: widget.auth.error!),
+                          ],
+                          const SizedBox(height: 18),
+                          FilledButton(
+                            onPressed: widget.auth.isSubmitting ? null : _submit,
+                            child: widget.auth.isSubmitting
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: p.textMuted),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(_registerMode ? 'Création…' : 'Connexion en cours…'),
+                                    ],
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(_registerMode ? 'Créer mon espace' : 'Se connecter'),
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.arrow_forward, size: 18),
+                                    ],
                                   ),
-                                )
-                              : Text(
-                                  _registerMode
-                                      ? 'Créer mon espace'
-                                      : 'Se connecter',
-                                ),
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+
+                  // ── Conjoint ──────────────────────────────────────────
                   if (!_registerMode) ...[
                     const SizedBox(height: 14),
                     OutlinedButton.icon(
                       onPressed: _openPartnerInvitation,
                       icon: const Icon(Icons.favorite_border),
-                      label: const Text(
-                        'J’ai reçu une invitation de mon conjoint',
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: YayColors.teal,
-                        minimumSize: const Size.fromHeight(48),
-                        side: BorderSide(color: context.yayBorder),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
+                      label: const Text('J’ai reçu une invitation de mon conjoint'),
                     ),
                   ],
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
+                  const YayNotice(
+                    kind: NoticeKind.info,
+                    message: 'Conjoint : utilisez le code d’invitation reçu. '
+                        'Professionnels de santé : connectez-vous sur le portail web.',
+                  ),
+                  const SizedBox(height: 16),
                   Text(
                     'YAY360 accompagne votre suivi et ne remplace pas l’avis d’un professionnel de santé.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: context.yayMuted,
-                      fontSize: 11,
-                      height: 1.5,
-                    ),
+                    style: TextStyle(color: p.textMuted, fontSize: 12, height: 1.5),
                   ),
                 ],
               ),
@@ -342,51 +287,195 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _textField(
-    TextEditingController controller,
-    String label,
-    String hint, {
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      textCapitalization: keyboardType == TextInputType.emailAddress
-          ? TextCapitalization.none
-          : TextCapitalization.words,
-      validator:
-          validator ??
-          (value) => value == null || value.trim().length < 2
-              ? 'Saisissez au moins 2 caractères.'
-              : null,
-      decoration: InputDecoration(labelText: label, hintText: hint),
+  Widget _nameField(TextEditingController controller, String label, String hint) => TextFormField(
+    controller: controller,
+    textCapitalization: TextCapitalization.words,
+    textInputAction: TextInputAction.next,
+    validator: (value) =>
+        value == null || value.trim().length < 2 ? 'Au moins 2 caractères.' : null,
+    decoration: InputDecoration(labelText: label, hintText: hint),
+  );
+}
+
+// ==================== Outils de saisie (partagés avec l'invitation) ====================
+
+String normalizePhone(String value) => value.replaceAll(RegExp(r'[\s().-]'), '');
+
+String isoDate(DateTime date) =>
+    '${date.year.toString().padLeft(4, '0')}-'
+    '${date.month.toString().padLeft(2, '0')}-'
+    '${date.day.toString().padLeft(2, '0')}';
+
+String? validateEmail(String? value) {
+  if (value == null || value.trim().isEmpty) return 'Saisissez votre e-mail.';
+  if (!value.contains('@') || !value.contains('.')) return 'Adresse e-mail invalide.';
+  return null;
+}
+
+/// Mobile sénégalais : +221 puis 70, 71, 75, 76, 77 ou 78, puis 7 chiffres (comme l'API).
+String? validatePhone(String? value) {
+  if (value == null || value.trim().isEmpty) return 'Saisissez votre téléphone.';
+  if (!RegExp(r'^\+221(70|71|75|76|77|78)\d{7}$').hasMatch(normalizePhone(value))) {
+    return 'Format attendu : +221 77 000 00 00.';
+  }
+  return null;
+}
+
+// ==================== Bandeau d'accueil ====================
+
+class _Hero extends StatelessWidget {
+  const _Hero();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    // Dégradé foncé : le texte blanc garde au moins 4,5:1 partout
+    final fin = Color.lerp(p.banner1, Colors.black, 0.25)!;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [p.banner1, fin],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Décor
+            Positioned(right: -30, top: -40, child: _Rond(130, Colors.white.withValues(alpha: 0.10))),
+            Positioned(right: 26, bottom: -26, child: _Rond(64, p.orange.withValues(alpha: 0.9))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+                    ),
+                    child: const Text(
+                      'Santé maternelle · Sénégal',
+                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Votre grossesse,\naccompagnée avec soin.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 25,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Padding(
+                    padding: EdgeInsets.only(right: 70),
+                    child: Text(
+                      'Des repères utiles, un suivi organisé et vos proches à vos côtés.',
+                      style: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
 
-  String _normalizePhone(String value) =>
-      value.replaceAll(RegExp(r'[\s().-]'), '');
+class _Rond extends StatelessWidget {
+  const _Rond(this.taille, this.couleur);
+  final double taille;
+  final Color couleur;
 
-  String? _validatePhone(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Saisissez votre téléphone.';
-    }
-    if (!RegExp(
-      r'^\+221(70|71|75|76|77|78)\d{7}$',
-    ).hasMatch(_normalizePhone(value))) {
-      return 'Format attendu : +221 77 000 00 00.';
-    }
-    return null;
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Container(width: taille, height: taille, decoration: BoxDecoration(color: couleur, shape: BoxShape.circle)),
+  );
+}
+
+// ==================== Onglets Connexion / Inscription ====================
+
+class _ModeTabs extends StatelessWidget {
+  const _ModeTabs({required this.inscription, required this.onChanged});
+  final bool inscription;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: p.surface2,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: p.borderLight, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _Onglet(titre: 'Connexion', actif: !inscription, onTap: () => onChanged(false))),
+          const SizedBox(width: 4),
+          Expanded(child: _Onglet(titre: 'Inscription', actif: inscription, onTap: () => onChanged(true))),
+        ],
+      ),
+    );
   }
 }
+
+class _Onglet extends StatelessWidget {
+  const _Onglet({required this.titre, required this.actif, required this.onTap});
+  final String titre;
+  final bool actif;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    return Semantics(
+      button: true,
+      selected: actif,
+      child: Material(
+        color: actif ? p.tealDark : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Center(
+              child: Text(
+                titre,
+                style: TextStyle(
+                  color: actif ? p.onStrong : p.textMuted,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== Compte conjoint (invitation) ====================
 
 class _PartnerInvitationSheet extends StatefulWidget {
   const _PartnerInvitationSheet({required this.auth});
   final AuthController auth;
 
   @override
-  State<_PartnerInvitationSheet> createState() =>
-      _PartnerInvitationSheetState();
+  State<_PartnerInvitationSheet> createState() => _PartnerInvitationSheetState();
 }
 
 class _PartnerInvitationSheetState extends State<_PartnerInvitationSheet> {
@@ -399,6 +488,7 @@ class _PartnerInvitationSheetState extends State<_PartnerInvitationSheet> {
   final _birth = TextEditingController();
   final _password = TextEditingController();
   bool _sending = false;
+  bool _hidePassword = true;
   String? _error;
 
   @override
@@ -421,12 +511,10 @@ class _PartnerInvitationSheetState extends State<_PartnerInvitationSheet> {
       firstDate: DateTime(1920),
       lastDate: today.subtract(const Duration(days: 1)),
       locale: const Locale('fr', 'FR'),
+      helpText: 'Votre date de naissance',
     );
     if (date != null) {
-      _birth.text =
-          '${date.year.toString().padLeft(4, '0')}-'
-          '${date.month.toString().padLeft(2, '0')}-'
-          '${date.day.toString().padLeft(2, '0')}';
+      _birth.text = isoDate(date);
       setState(() {});
     }
   }
@@ -443,7 +531,7 @@ class _PartnerInvitationSheetState extends State<_PartnerInvitationSheet> {
       'prenom': _firstName.text.trim(),
       'nom': _lastName.text.trim(),
       'password': _password.text,
-      'telephone': _phone.text.replaceAll(RegExp(r'[\s().-]'), ''),
+      'telephone': normalizePhone(_phone.text),
       'dateNaissance': _birth.text,
     });
     if (!mounted) return;
@@ -457,261 +545,157 @@ class _PartnerInvitationSheetState extends State<_PartnerInvitationSheet> {
     }
   }
 
+  String? _requis(String? value) => value == null || value.trim().isEmpty ? 'Champ requis.' : null;
+
   @override
   Widget build(BuildContext context) {
+    final p = context.yay;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * .9,
-        ),
-        decoration: BoxDecoration(
-          color: context.yayCanvas,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: context.yayBorder,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(color: p.orangeSoft, borderRadius: BorderRadius.circular(14)),
+                    child: Icon(Icons.favorite_border, color: p.orangeInk),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Rejoindre le dossier familial',
+                      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: p.textMain),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Rejoindre le dossier familial',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: context.yayInk,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Complétez le formulaire avec le token et l’e-mail de l’invitation reçue.',
-                    style: TextStyle(color: context.yayMuted, height: 1.5),
-                  ),
-                  const SizedBox(height: 18),
-                  _inviteField(_token, 'Token d’invitation'),
-                  const SizedBox(height: 12),
-                  _inviteField(
-                    _email,
-                    'E-mail invité',
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: _inviteField(_firstName, 'Prénom')),
-                      const SizedBox(width: 10),
-                      Expanded(child: _inviteField(_lastName, 'Nom')),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _inviteField(
-                    _phone,
-                    'Téléphone',
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _birth,
-                    readOnly: true,
-                    onTap: _selectDate,
-                    validator: (value) => value == null || value.isEmpty
-                        ? 'Choisissez votre date de naissance.'
-                        : null,
-                    decoration: const InputDecoration(
-                      labelText: 'Date de naissance',
-                      suffixIcon: Icon(Icons.calendar_month_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _inviteField(
-                    _password,
-                    'Mot de passe (6 caractères minimum)',
-                    obscure: true,
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 14),
-                    _ErrorBox(message: _error!),
-                  ],
-                  const SizedBox(height: 18),
-                  FilledButton(
-                    onPressed: _sending ? null : _submit,
-                    child: _sending
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Créer mon compte conjoint'),
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 10),
+              Text(
+                'Saisissez le code et l’adresse e-mail indiqués dans l’invitation reçue.',
+                style: TextStyle(color: p.textMuted, height: 1.5, fontSize: 13),
+              ),
+              const SizedBox(height: 18),
+              TextFormField(
+                controller: _token,
+                validator: _requis,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Code d’invitation',
+                  helperText: 'Valable 72 heures, à usage unique.',
+                  prefixIcon: Icon(Icons.key_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                validator: validateEmail,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'E-mail invité',
+                  prefixIcon: Icon(Icons.mail_outline),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _firstName,
+                      validator: _requis,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(labelText: 'Prénom'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _lastName,
+                      validator: _requis,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(labelText: 'Nom'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                validator: validatePhone,
+                decoration: const InputDecoration(
+                  labelText: 'Téléphone',
+                  hintText: '+221 77 000 00 00',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _birth,
+                readOnly: true,
+                onTap: _selectDate,
+                validator: (value) =>
+                    value == null || value.isEmpty ? 'Choisissez votre date de naissance.' : null,
+                decoration: const InputDecoration(
+                  labelText: 'Date de naissance',
+                  prefixIcon: Icon(Icons.cake_outlined),
+                  suffixIcon: Icon(Icons.calendar_month_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _password,
+                obscureText: _hidePassword,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Champ requis.';
+                  return PasswordRules.valide(value) ? null : PasswordRules.aide;
+                },
+                decoration: InputDecoration(
+                  labelText: 'Mot de passe',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    tooltip: _hidePassword ? 'Afficher le mot de passe' : 'Masquer le mot de passe',
+                    style: IconButton.styleFrom(backgroundColor: Colors.transparent, side: BorderSide.none),
+                    onPressed: () => setState(() => _hidePassword = !_hidePassword),
+                    icon: Icon(_hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              PasswordRules(controller: _password),
+              if (_error != null) ...[
+                const SizedBox(height: 14),
+                YayNotice(kind: NoticeKind.error, message: _error!),
+              ],
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: _sending ? null : _submit,
+                child: _sending
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: p.textMuted),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text('Création…'),
+                        ],
+                      )
+                    : const Text('Créer mon compte conjoint'),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
-
-  Widget _inviteField(
-    TextEditingController controller,
-    String label, {
-    TextInputType? keyboardType,
-    bool obscure = false,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      obscureText: obscure,
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) return 'Champ requis.';
-        if (label == 'E-mail invité' && !value.contains('@')) {
-          return 'E-mail invalide.';
-        }
-        if (label == 'Téléphone' &&
-            !RegExp(
-              r'^\+221(70|71|75|76|77|78)\d{7}$',
-            ).hasMatch(value.replaceAll(RegExp(r'[\s().-]'), ''))) {
-          return 'Format attendu : +221 77 000 00 00.';
-        }
-        if (obscure &&
-            (value.length < 6 ||
-                !RegExp(r'[A-Za-z]').hasMatch(value) ||
-                !RegExp(r'\d').hasMatch(value))) {
-          return '6 caractères minimum, avec une lettre et un chiffre.';
-        }
-        return null;
-      },
-      decoration: InputDecoration(labelText: label),
-    );
-  }
-}
-
-class _Brand extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      ClipOval(
-        child: Image.asset(
-          'assets/images/yay360-logo.png',
-          width: 42,
-          height: 42,
-          fit: BoxFit.cover,
-        ),
-      ),
-      const SizedBox(width: 10),
-      Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(
-              text: 'YAY',
-              style: TextStyle(color: context.yayInk),
-            ),
-            TextSpan(
-              text: '360',
-              style: TextStyle(color: YayColors.rose),
-            ),
-          ],
-        ),
-        style: TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w900,
-          letterSpacing: -1,
-        ),
-      ),
-    ],
-  );
-}
-
-class _Eyebrow extends StatelessWidget {
-  const _Eyebrow({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Text(
-    text,
-    style: const TextStyle(
-      color: Color(0xFFE9AFB9),
-      fontSize: 10,
-      fontWeight: FontWeight.w800,
-      letterSpacing: 1,
-    ),
-  );
-}
-
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({
-    required this.title,
-    required this.selected,
-    required this.onTap,
-  });
-  final String title;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(12),
-    child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: selected ? context.yayRoseContainer : context.yaySurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: selected
-              ? YayColors.rose.withValues(alpha: .35)
-              : context.yayBorder,
-        ),
-      ),
-      child: Center(
-        child: Text(
-          title,
-          style: TextStyle(
-            color: selected
-                ? Theme.of(context).colorScheme.onPrimaryContainer
-                : context.yayMuted,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-class _ErrorBox extends StatelessWidget {
-  const _ErrorBox({required this.message});
-  final String message;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: context.yayRoseContainer,
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Text(
-      message,
-      style: TextStyle(
-        color: Theme.of(context).colorScheme.onPrimaryContainer,
-        fontSize: 13,
-      ),
-    ),
-  );
 }

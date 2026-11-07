@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../state/auth_controller.dart';
 import '../theme.dart';
+import '../widgets/common.dart';
 import 'appointments_screen.dart';
-import 'assistant_screen.dart';
 import 'dashboard_screen.dart';
 import 'family_screen.dart';
 import 'followup_screen.dart';
@@ -25,45 +25,15 @@ class _MobileShellState extends State<MobileShell> {
     final session = widget.auth.session!;
     final screens = <Widget>[
       DashboardScreen(auth: widget.auth, onOpenTab: _openTab),
-      FollowupScreen(api: widget.auth.api),
+      FollowupScreen(auth: widget.auth),
       AppointmentsScreen(api: widget.auth.api),
       FamilyScreen(auth: widget.auth),
     ];
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 20,
-        title: Row(
-          children: [
-            ClipOval(
-              child: Image.asset(
-                'assets/images/yay360-logo.png',
-                width: 31,
-                height: 31,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'YAY',
-                    style: TextStyle(color: context.yayInk),
-                  ),
-                  TextSpan(
-                    text: '360',
-                    style: TextStyle(color: YayColors.rose),
-                  ),
-                ],
-              ),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.7,
-              ),
-            ),
-          ],
-        ),
+        toolbarHeight: 64,
+        title: const YayBrand(size: 36),
         actions: [
           IconButton(
             tooltip: Theme.of(context).brightness == Brightness.dark
@@ -76,38 +46,32 @@ class _MobileShellState extends State<MobileShell> {
                   : Icons.dark_mode_outlined,
             ),
           ),
+          const SizedBox(width: 8),
           Padding(
             padding: const EdgeInsets.only(right: 18),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: context.yayRoseContainer,
-              child: Text(
-                session.firstName.isNotEmpty
-                    ? session.firstName[0].toUpperCase()
-                    : 'Y',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w800,
+            child: Semantics(
+              label: 'Compte de ${session.firstName} ${session.lastName}',
+              excludeSemantics: true,
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: context.yay.tealDark,
+                child: Text(
+                  session.firstName.isNotEmpty ? session.firstName[0].toUpperCase() : 'Y',
+                  style: TextStyle(color: context.yay.onStrong, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.5),
+          child: Container(height: 1.5, color: context.yay.borderLight),
+        ),
       ),
       body: IndexedStack(index: _index, children: screens),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAssistant,
-        icon: const Icon(Icons.auto_awesome),
-        label: const Text('Assistant IA'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (index) => setState(() => _index = index),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        indicatorColor: Theme.of(context).colorScheme.primaryContainer,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -135,19 +99,4 @@ class _MobileShellState extends State<MobileShell> {
   }
 
   void _openTab(int index) => setState(() => _index = index);
-
-  Future<void> _openAssistant() => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) => Container(
-      height: MediaQuery.sizeOf(context).height * .92,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: SafeArea(top: false, child: AssistantScreen(api: widget.auth.api)),
-    ),
-  );
 }

@@ -9,12 +9,9 @@ Application Flutter pour les femmes enceintes et leur conjoint, connectée à l'
 - Déclaration de grossesse et tableau de bord (semaine, date prévue, rendez-vous à venir).
 - Repères prénataux hebdomadaires, demandes de rendez-vous et signalement de symptômes.
 - Invitation du conjoint au dossier familial.
-- Assistant IA conversationnel avec consentement explicite avant chaque envoi, historique limité à 12 messages et avertissement médical.
 - Thèmes clair et sombre, commutables depuis l'écran de connexion et l'en-tête de l'application.
 
-L'identité visuelle utilise le rose poudré `#E87A90`, le teal médical `#2A9D8F`, des neutres doux et des couleurs dédiées aux états de succès, de vigilance et d'urgence.
-
-L'assistant fournit des informations générales, ne pose pas de diagnostic et ne remplace pas un professionnel de santé. Le message et l'historique soumis sont transmis au fournisseur IA configuré par l'API. Ne saisissez pas de données directement identifiantes. L'assistant reste indisponible tant qu'il n'est pas configuré côté backend.
+L'identité visuelle est celle du portail web : turquoise `#2BA3A8` (identité), orange `#F7A84B` (actions, texte foncé posé dessus), police Poppins intégrée (`assets/fonts`, licence OFL), thèmes clair et sombre. Les couleurs sont définies dans `lib/theme.dart` (`YayPalette`, accessible par `context.yay`) ; chaque couple texte / fond atteint au moins 4,5:1, ce que vérifie `test/theme_test.dart`.
 
 ## Lancer l'application
 

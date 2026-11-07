@@ -5,13 +5,12 @@ import '../data/models.dart';
 import '../state/auth_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/symptom_sheet.dart';
 
+/// Accueil de la patiente et du conjoint : grossesse, actions rapides, prochain
+/// rendez-vous, consultations prénatales (OMS) et repère de la semaine.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({
-    super.key,
-    required this.auth,
-    required this.onOpenTab,
-  });
+  const DashboardScreen({super.key, required this.auth, required this.onOpenTab});
   final AuthController auth;
   final ValueChanged<int> onOpenTab;
 
@@ -22,9 +21,12 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   Pregnancy? _pregnancy;
   WeeklyFollowup? _weekly;
+  CpnPlan? _plan;
   List<Appointment> _appointments = [];
   bool _loading = true;
   String? _error;
+
+  bool get _estFemme => widget.auth.session?.role == 'FEMME_ENCEINTE';
 
   @override
   void initState() {
@@ -39,29 +41,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
     final api = widget.auth.api;
     try {
-      final pregnancyResult = await api.get('/grossesses/ma-grossesse');
-      _pregnancy = Pregnancy.fromJson(pregnancyResult);
+      _pregnancy = Pregnancy.fromJson(await api.get('/grossesses/ma-grossesse'));
+      // Blocs secondaires : leur échec n'empêche pas d'afficher le reste
       try {
-        _weekly = WeeklyFollowup.fromJson(
-          await api.get('/grossesses/mon-suivi'),
-        );
+        _weekly = WeeklyFollowup.fromJson(await api.get('/grossesses/mon-suivi'));
       } on ApiException {
         _weekly = null;
+      }
+      try {
+        _plan = CpnPlan.fromJson(await api.get('/grossesses/mon-plan-cpn'));
+      } on ApiException {
+        _plan = null;
       }
     } on ApiException catch (exception) {
       _pregnancy = null;
       _weekly = null;
+      _plan = null;
       if (exception.statusCode != 404) _error = exception.message;
     }
 
     try {
       final records = await api.getList('/rendez-vous/mes-rendez-vous/a-venir');
-      _appointments =
-          records
-              .whereType<Map<String, dynamic>>()
-              .map(Appointment.fromJson)
-              .toList()
-            ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      _appointments = records.whereType<Map<String, dynamic>>().map(Appointment.fromJson).toList()
+        ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
     } on ApiException catch (exception) {
       _error ??= exception.message;
     }
@@ -69,129 +71,164 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _startPregnancy() async {
-    await showModalBottomSheet<void>(
+    final cree = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _PregnancyForm(
-        api: widget.auth.api,
-        onCreated: () {
-          Navigator.pop(context);
-          _load();
-        },
-      ),
+      useSafeArea: true,
+      builder: (_) => _PregnancyForm(api: widget.auth.api),
     );
+    if (cree == true) _load();
   }
 
   Future<void> _reportSymptom() async {
     final pregnancy = _pregnancy;
     if (pregnancy == null) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) =>
-          _SymptomForm(api: widget.auth.api, pregnancyId: pregnancy.id),
-    );
+    await reportSymptom(context, api: widget.auth.api, pregnancyId: pregnancy.id);
   }
 
   @override
   Widget build(BuildContext context) {
+    final p = context.yay;
     final session = widget.auth.session!;
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
+          Text('Bonjour, ${session.firstName}',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: p.textMain)),
+          const SizedBox(height: 2),
           Text(
-            'Bonjour, ${session.firstName}',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: context.yayInk,
-              fontWeight: FontWeight.w800,
-            ),
+            _estFemme ? 'Votre espace de suivi maternel' : 'Le suivi de grossesse que vous partagez',
+            style: TextStyle(color: p.textMuted, fontSize: 14),
           ),
-          const SizedBox(height: 5),
-          Text(
-            'Votre espace de suivi maternel',
-            style: TextStyle(color: context.yayMuted),
-          ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           if (_error != null) ...[
-            _ErrorCard(message: _error!, onRetry: _load),
-            const SizedBox(height: 15),
+            _ErreurChargement(message: _error!, onRetry: _load),
+            const SizedBox(height: 14),
           ],
           if (_loading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 60),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement de votre suivi')),
             )
           else if (_pregnancy == null)
-            MessagePanel(
-              icon: Icons.favorite_outline,
-              title: 'Votre suivi commence ici',
-              message:
-                  'Déclarez votre grossesse pour accéder à votre calendrier et aux repères de chaque semaine.',
-              action: 'Déclarer ma grossesse',
-              onAction: _startPregnancy,
-            )
+            _SansGrossesse(estFemme: _estFemme, onDeclare: _startPregnancy)
           else ...[
-            _PregnancyCard(pregnancy: _pregnancy!),
-            const SizedBox(height: 16),
-            if (_weekly?.babyDevelopment?.isNotEmpty == true)
-              _WeeklyCard(weekly: _weekly!, onTap: () => widget.onOpenTab(1))
-            else
-              MessagePanel(
-                icon: Icons.auto_awesome_outlined,
-                title: 'Votre repère de la semaine',
-                message:
-                    'Les conseils personnalisés seront affichés ici dès qu’ils seront disponibles.',
-                action: 'Voir mon suivi',
-                onAction: () => widget.onOpenTab(1),
-              ),
-            const SizedBox(height: 15),
-            _ActionRow(
-              onAppointment: () => widget.onOpenTab(2),
-              onAlert: _reportSymptom,
+            _CarteGrossesse(pregnancy: _pregnancy!),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _ActionRapide(
+                    icone: Icons.calendar_month_outlined,
+                    titre: 'Demander un rendez-vous',
+                    fond: p.tealSoft,
+                    couleur: p.tealInk,
+                    onTap: () => widget.onOpenTab(2),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ActionRapide(
+                    icone: Icons.warning_amber_rounded,
+                    titre: 'Signaler un symptôme',
+                    fond: p.dangerSoft,
+                    couleur: p.danger,
+                    onTap: _reportSymptom,
+                  ),
+                ),
+              ],
             ),
           ],
-          const SectionHeading('Prochain rendez-vous'),
-          if (_loading)
-            const LinearProgressIndicator()
-          else if (_appointments.isEmpty)
-            MessagePanel(
-              icon: Icons.event_available_outlined,
-              title: 'Pas de rendez-vous à venir',
-              message:
-                  'Pensez à organiser votre prochaine consultation prénatale.',
-              action: 'Prendre rendez-vous',
-              onAction: () => widget.onOpenTab(2),
-            )
-          else
-            _AppointmentCard(appointment: _appointments.first),
-          const SectionHeading('Vos repères YAY360'),
-          const _FeatureTile(
-            icon: Icons.favorite_outline,
-            color: YayColors.rose,
-            title: 'Un suivi à votre rythme',
-            subtitle:
-                'Des étapes et des informations adaptées à votre grossesse.',
+          if (!_loading) ...[
+            SectionHeading('Prochain rendez-vous',
+                action: _appointments.isEmpty ? null : 'Tout voir', onAction: () => widget.onOpenTab(2)),
+            if (_appointments.isEmpty)
+              MessagePanel(
+                icon: Icons.event_available_outlined,
+                title: 'Pas de rendez-vous à venir',
+                message: 'Pensez à organiser votre prochaine consultation prénatale.',
+                action: 'Demander un rendez-vous',
+                onAction: () => widget.onOpenTab(2),
+              )
+            else
+              _CarteRendezVous(appointment: _appointments.first),
+            if (_plan != null && _plan!.contacts.isNotEmpty) ...[
+              const SectionHeading('Consultations prénatales'),
+              _CartePlanCpn(plan: _plan!),
+            ],
+            if (_pregnancy != null) ...[
+              SectionHeading('Conseils de la semaine', action: 'Voir mon suivi', onAction: () => widget.onOpenTab(1)),
+              _CarteSemaine(weekly: _weekly, onTap: () => widget.onOpenTab(1)),
+            ],
+            const SizedBox(height: 16),
+            const YayNotice(kind: NoticeKind.warning, message: messageUrgence),
+            const SizedBox(height: 14),
+            Text(
+              'YAY360 complète le suivi médical, mais ne remplace jamais l’avis d’un professionnel de santé.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: p.textMuted, fontSize: 12, height: 1.5),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== Grossesse ====================
+
+class _CarteGrossesse extends StatelessWidget {
+  const _CarteGrossesse({required this.pregnancy});
+  final Pregnancy pregnancy;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final semaine = pregnancy.week ?? 0;
+    final couleur = pregnancy.atRisk ? p.viz2 : p.viz1;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: p.borderLight, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          ProgressRing(
+            value: semaine / 40,
+            color: couleur,
+            semanticsLabel: 'Semaine $semaine sur 40',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('$semaine', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w600, color: p.tealInk, height: 1)),
+                Text('sur 40 sem.', style: TextStyle(fontSize: 11, color: p.textMuted)),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          const _FeatureTile(
-            icon: Icons.people_outline,
-            color: YayColors.green,
-            title: 'Ensemble dans cette aventure',
-            subtitle:
-                'Votre conjoint peut être invité à rejoindre le dossier familial.',
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'YAY360 complète le suivi médical, mais ne remplace jamais l’avis d’un professionnel de santé.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: context.yayMuted,
-              fontSize: 11,
-              height: 1.5,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Ma grossesse', style: TextStyle(fontSize: 13, color: p.textMuted, fontWeight: FontWeight.w500)),
+                Text(trimesterLabel(pregnancy.trimester),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: p.textMain)),
+                if (pregnancy.atRisk) ...[
+                  const SizedBox(height: 6),
+                  StatusPill('Suivi renforcé', background: p.orangeSoft, foreground: p.orangeInk, icon: Icons.shield_outlined),
+                ],
+                const SizedBox(height: 10),
+                if (pregnancy.dueDate != null)
+                  _Fait(icone: Icons.event_outlined, texte: 'Terme prévu : ${frenchDate(pregnancy.dueDate)}'),
+                if (pregnancy.daysRemaining != null) ...[
+                  const SizedBox(height: 4),
+                  _Fait(icone: Icons.hourglass_bottom, texte: '${pregnancy.daysRemaining} jours restants'),
+                ],
+              ],
             ),
           ),
         ],
@@ -200,424 +237,348 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _PregnancyCard extends StatelessWidget {
-  const _PregnancyCard({required this.pregnancy});
-  final Pregnancy pregnancy;
+class _Fait extends StatelessWidget {
+  const _Fait({required this.icone, required this.texte});
+  final IconData icone;
+  final String texte;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(21),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(19),
-      gradient: const LinearGradient(
-        colors: [YayColors.green, Color(0xFF1E3F32)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: YayColors.green.withValues(alpha: .17),
-          blurRadius: 22,
-          offset: const Offset(0, 9),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    return Row(
       children: [
-        const Row(
-          children: [
-            Icon(Icons.spa_outlined, color: Color(0xFFE9AFB9), size: 18),
-            SizedBox(width: 8),
-            Text(
-              'VOTRE GROSSESSE',
-              style: TextStyle(
-                color: Color(0xFFE9AFB9),
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1,
-              ),
+        Icon(icone, size: 15, color: p.tealInk),
+        const SizedBox(width: 6),
+        Expanded(child: Text(texte, style: TextStyle(fontSize: 13, color: p.textMain))),
+      ],
+    );
+  }
+}
+
+class _SansGrossesse extends StatelessWidget {
+  const _SansGrossesse({required this.estFemme, required this.onDeclare});
+  final bool estFemme;
+  final VoidCallback onDeclare;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: p.borderLight, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(color: p.orangeSoft, shape: BoxShape.circle),
+            child: Icon(Icons.favorite_border, color: p.orangeInk),
+          ),
+          const SizedBox(height: 12),
+          Text(estFemme ? 'Votre suivi commence ici' : 'En attente de la déclaration',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: p.textMain)),
+          const SizedBox(height: 4),
+          Text(
+            estFemme
+                ? 'Déclarez votre grossesse pour obtenir votre calendrier et les repères de chaque semaine.'
+                : 'La grossesse apparaîtra ici dès que la future maman l’aura déclarée depuis son compte.',
+            style: TextStyle(fontSize: 14, color: p.textMuted, height: 1.5),
+          ),
+          if (estFemme) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onDeclare,
+              icon: const Icon(Icons.arrow_forward, size: 18),
+              label: const Text('Déclarer ma grossesse'),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== Actions rapides ====================
+
+class _ActionRapide extends StatelessWidget {
+  const _ActionRapide({required this.icone, required this.titre, required this.fond, required this.couleur, required this.onTap});
+  final IconData icone;
+  final String titre;
+  final Color fond;
+  final Color couleur;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    return Semantics(
+      button: true,
+      child: Material(
+        color: p.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: p.borderLight, width: 1.5),
         ),
-        const SizedBox(height: 15),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              '${pregnancy.week ?? '—'}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 53,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: fond, borderRadius: BorderRadius.circular(12)),
+                  child: Icon(icone, color: couleur, size: 22),
+                ),
+                const SizedBox(height: 10),
+                Text(titre, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textMain, height: 1.3)),
+              ],
             ),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 7, left: 8),
-              child: Text(
-                'semaines',
-                style: TextStyle(color: Color(0xFFD6E4DA), fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 13),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(9),
-          child: LinearProgressIndicator(
-            value: ((pregnancy.week ?? 0).clamp(0, 40)) / 40,
-            minHeight: 7,
-            backgroundColor: Colors.white.withValues(alpha: .2),
-            valueColor: const AlwaysStoppedAnimation(YayColors.rose),
           ),
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                pregnancy.trimester ?? 'Votre suivi prénatal',
-                style: const TextStyle(color: Color(0xFFE4EEE6), fontSize: 12),
-              ),
-            ),
-            if (pregnancy.daysRemaining != null)
-              Text(
-                '${pregnancy.daysRemaining} jours restants',
-                style: const TextStyle(
-                  color: Color(0xFFE4EEE6),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-          ],
-        ),
-        if (pregnancy.dueDate != null) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .1),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Row(
+      ),
+    );
+  }
+}
+
+// ==================== Rendez-vous ====================
+
+class _CarteRendezVous extends StatelessWidget {
+  const _CarteRendezVous({required this.appointment});
+  final Appointment appointment;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final (libelle, fond, texte) = appointmentStatus(context, appointment.status);
+    final heure = '${appointment.dateTime.hour.toString().padLeft(2, '0')}h${appointment.dateTime.minute.toString().padLeft(2, '0')}';
+    return ContentCard(
+      child: Row(
+        children: [
+          DateBlock(appointment.dateTime),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.event_outlined,
-                  color: Colors.white70,
-                  size: 17,
-                ),
-                const SizedBox(width: 9),
+                Text(appointmentType(appointment.type),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: p.textMain)),
+                const SizedBox(height: 2),
                 Text(
-                  'Date prévue : ${frenchDate(pregnancy.dueDate)}',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  [heure, if (appointment.facility?.isNotEmpty == true) appointment.facility!].join(' · '),
+                  style: TextStyle(color: p.textMuted, fontSize: 13),
                 ),
+                const SizedBox(height: 8),
+                StatusPill(libelle, background: fond, foreground: texte),
               ],
             ),
           ),
         ],
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
-class _WeeklyCard extends StatelessWidget {
-  const _WeeklyCard({required this.weekly, required this.onTap});
-  final WeeklyFollowup weekly;
-  final VoidCallback onTap;
+// ==================== Plan CPN (OMS) ====================
+
+class _CartePlanCpn extends StatelessWidget {
+  const _CartePlanCpn({required this.plan});
+  final CpnPlan plan;
 
   @override
-  Widget build(BuildContext context) => ContentCard(
-    padding: const EdgeInsets.all(18),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: context.yayRoseContainer,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.auto_awesome,
-                color: YayColors.rose,
-                size: 19,
-              ),
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Cette semaine${weekly.week == null ? '' : ' · Semaine ${weekly.week}'}',
-                    style: TextStyle(
-                      color: context.yayInk,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Text(
-                    weekly.trimester ?? 'Un repère pour vous',
-                    style: TextStyle(color: context.yayMuted, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Text(
-          weekly.babyDevelopment ?? '',
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: context.yayMuted, fontSize: 13, height: 1.6),
-        ),
-        const SizedBox(height: 8),
-        TextButton.icon(
-          onPressed: onTap,
-          style: TextButton.styleFrom(
-            foregroundColor: Theme.of(context).colorScheme.secondary,
-            padding: EdgeInsets.zero,
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    return ContentCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${plan.done} sur ${plan.contacts.length} consultations réalisées',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: p.textMain),
           ),
-          icon: const Icon(Icons.arrow_forward, size: 16),
-          label: const Text('Découvrir mon suivi'),
-        ),
-      ],
-    ),
-  );
+          if (plan.late > 0) ...[
+            const SizedBox(height: 6),
+            StatusPill('${plan.late} en retard', background: p.dangerSoft, foreground: p.danger, icon: Icons.schedule),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              for (final c in plan.contacts) Expanded(child: _PointCpn(contact: c)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            children: [
+              _Legende(couleur: p.tealDark, plein: true, texte: 'Réalisée'),
+              _Legende(couleur: p.orange, plein: true, texte: 'Planifiée'),
+              _Legende(couleur: p.danger, plein: false, texte: 'En retard'),
+              _Legende(couleur: p.borderStrong, plein: false, texte: 'À venir'),
+            ],
+          ),
+          if (plan.reference?.isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            Text(plan.reference!, style: TextStyle(fontSize: 12, color: p.textMuted)),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({required this.onAppointment, required this.onAlert});
-  final VoidCallback onAppointment;
-  final VoidCallback onAlert;
+class _PointCpn extends StatelessWidget {
+  const _PointCpn({required this.contact});
+  final CpnContact contact;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final (fond, bord, texte, libelle) = switch (contact.status) {
+      'REALISE' => (p.tealDark, p.tealDark, p.onStrong, 'réalisée'),
+      'PLANIFIE' => (p.orange, p.orangeLine, p.onAccent, 'planifiée'),
+      'EN_RETARD' => (p.surface, p.danger, p.danger, 'en retard'),
+      _ => (p.surface, p.borderStrong, p.textMuted, 'à venir'),
+    };
+    return Semantics(
+      label: 'Consultation ${contact.number}, ${contact.targetWeek} semaines, $libelle',
+      excludeSemantics: true,
+      child: Column(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(color: fond, shape: BoxShape.circle, border: Border.all(color: bord, width: 1.5)),
+            child: Center(
+              child: contact.status == 'REALISE'
+                  ? Icon(Icons.check, size: 16, color: texte)
+                  : Text('${contact.number}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: texte)),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text('${contact.targetWeek}', style: TextStyle(fontSize: 11, color: p.textMuted)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Legende extends StatelessWidget {
+  const _Legende({required this.couleur, required this.plein, required this.texte});
+  final Color couleur;
+  final bool plein;
+  final String texte;
 
   @override
   Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
     children: [
-      Expanded(
-        child: _ActionButton(
-          icon: Icons.calendar_month_outlined,
-          title: 'Rendez-vous',
-          subtitle: 'Organiser mon suivi',
-          onTap: onAppointment,
+      Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: plein ? couleur : Colors.transparent,
+          shape: BoxShape.circle,
+          border: Border.all(color: couleur, width: 1.5),
         ),
       ),
-      const SizedBox(width: 11),
-      Expanded(
-        child: _ActionButton(
-          icon: Icons.health_and_safety_outlined,
-          title: 'Signaler',
-          subtitle: 'Un symptôme',
-          onTap: onAlert,
-        ),
+      const SizedBox(width: 5),
+      Text(texte, style: TextStyle(fontSize: 12, color: context.yay.textMuted)),
+    ],
+  );
+}
+
+// ==================== Semaine ====================
+
+class _CarteSemaine extends StatelessWidget {
+  const _CarteSemaine({required this.weekly, required this.onTap});
+  final WeeklyFollowup? weekly;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final w = weekly;
+    final items = <(IconData, String, String?, Color, Color)>[
+      (Icons.child_care_outlined, 'Le bébé', w?.babyDevelopment, p.tealSoft, p.tealInk),
+      (Icons.person_outline, 'Pour vous', w?.motherChanges, p.orangeSoft, p.orangeInk),
+      (Icons.flag_outlined, 'Objectifs santé', w?.healthGoals, p.lilacSoft, p.lilacInk),
+    ].where((e) => e.$3?.isNotEmpty == true).toList();
+    if (items.isEmpty) {
+      return MessagePanel(
+        icon: Icons.auto_awesome_outlined,
+        title: 'Votre repère de la semaine',
+        message: 'Les conseils de votre semaine s’afficheront ici dès qu’ils seront disponibles.',
+        action: 'Voir mon suivi',
+        onAction: onTap,
+      );
+    }
+    return ContentCard(
+      child: Column(
+        children: [
+          for (final (i, e) in items.indexed) ...[
+            if (i > 0) const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(color: e.$4, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(e.$1, size: 19, color: e.$5),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(e.$2, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: p.textMain)),
+                      Text(e.$3!, maxLines: 3, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, color: p.textMuted, height: 1.5)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ErreurChargement extends StatelessWidget {
+  const _ErreurChargement({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      YayNotice(kind: NoticeKind.error, title: 'Chargement incomplet', message: message),
+      const SizedBox(height: 8),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh, size: 18), label: const Text('Réessayer')),
       ),
     ],
   );
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(16),
-    child: ContentCard(
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        children: [
-          Icon(icon, color: YayColors.rose, size: 21),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: context.yayInk,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: context.yayMuted, fontSize: 10),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _AppointmentCard extends StatelessWidget {
-  const _AppointmentCard({required this.appointment});
-  final Appointment appointment;
-
-  @override
-  Widget build(BuildContext context) => ContentCard(
-    child: Row(
-      children: [
-        Container(
-          width: 49,
-          height: 53,
-          decoration: BoxDecoration(
-            color: context.yayTealContainer,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '${appointment.dateTime.day}',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSecondaryContainer,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                ),
-              ),
-              Text(
-                '${appointment.dateTime.month}/${appointment.dateTime.year}',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSecondaryContainer,
-                  fontSize: 9,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 13),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                appointmentType(appointment.type),
-                style: TextStyle(
-                  color: context.yayInk,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                frenchDate(appointment.dateTime, includeTime: true),
-                style: TextStyle(color: context.yayMuted, fontSize: 11),
-              ),
-              if (appointment.facility?.isNotEmpty == true)
-                Text(
-                  appointment.facility!,
-                  style: TextStyle(color: context.yayMuted, fontSize: 11),
-                ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _FeatureTile extends StatelessWidget {
-  const _FeatureTile({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-  });
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) => ContentCard(
-    padding: const EdgeInsets.all(14),
-    child: Row(
-      children: [
-        Icon(icon, color: color, size: 23),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: context.yayInk,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: context.yayMuted,
-                  fontSize: 11,
-                  height: 1.45,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message, required this.onRetry});
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) => ContentCard(
-    child: Row(
-      children: [
-        Icon(
-          Icons.wifi_off_outlined,
-          color: Theme.of(context).colorScheme.error,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            message,
-            style: TextStyle(color: context.yayInk, fontSize: 12),
-          ),
-        ),
-        IconButton(
-          onPressed: onRetry,
-          icon: Icon(
-            Icons.refresh,
-            color: Theme.of(context).colorScheme.secondary,
-          ),
-        ),
-      ],
-    ),
-  );
-}
+// ==================== Déclaration de la grossesse ====================
 
 class _PregnancyForm extends StatefulWidget {
-  const _PregnancyForm({required this.api, required this.onCreated});
+  const _PregnancyForm({required this.api});
   final ApiClient api;
-  final VoidCallback onCreated;
 
   @override
   State<_PregnancyForm> createState() => _PregnancyFormState();
@@ -633,7 +594,7 @@ class _PregnancyFormState extends State<_PregnancyForm> {
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
-      initialDate: DateTime(now.year, now.month - 2, now.day),
+      initialDate: _period ?? DateTime(now.year, now.month - 2, now.day),
       firstDate: DateTime(now.year - 1),
       lastDate: now,
       locale: const Locale('fr', 'FR'),
@@ -644,7 +605,7 @@ class _PregnancyFormState extends State<_PregnancyForm> {
 
   Future<void> _submit() async {
     if (_period == null) {
-      setState(() => _error = 'Sélectionnez la date des dernières règles.');
+      setState(() => _error = 'Choisissez la date des dernières règles.');
       return;
     }
     setState(() {
@@ -652,14 +613,13 @@ class _PregnancyFormState extends State<_PregnancyForm> {
       _error = null;
     });
     try {
+      final d = _period!;
       await widget.api.post('/grossesses', {
         'dateDernieresRegles':
-            '${_period!.year.toString().padLeft(4, '0')}-'
-            '${_period!.month.toString().padLeft(2, '0')}-'
-            '${_period!.day.toString().padLeft(2, '0')}',
+            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}',
         'nombreGrossessesPrecedentes': _previousPregnancies,
       });
-      widget.onCreated();
+      if (mounted) Navigator.pop(context, true);
     } on ApiException catch (exception) {
       if (mounted) {
         setState(() {
@@ -671,40 +631,33 @@ class _PregnancyFormState extends State<_PregnancyForm> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-    child: Container(
-      decoration: BoxDecoration(
-        color: context.yayCanvas,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: const EdgeInsets.fromLTRB(22, 25, 22, 28),
-      child: SafeArea(
-        top: false,
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Text('Déclarer ma grossesse', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: p.textMain)),
+            const SizedBox(height: 4),
             Text(
-              'Déclarer ma grossesse',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: context.yayInk,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Ces informations permettent de calculer votre calendrier de suivi.',
-              style: TextStyle(color: context.yayMuted, height: 1.5),
+              'La date des dernières règles suffit pour calculer votre terme et votre calendrier.',
+              style: TextStyle(color: p.textMuted, height: 1.5, fontSize: 13),
             ),
             const SizedBox(height: 18),
-            OutlinedButton.icon(
-              onPressed: _selectPeriod,
-              icon: const Icon(Icons.calendar_month_outlined),
-              label: Text(
-                _period == null
-                    ? 'Choisir la date des dernières règles'
-                    : frenchDate(_period),
+            InkWell(
+              onTap: _selectPeriod,
+              borderRadius: BorderRadius.circular(14),
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Premier jour des dernières règles',
+                  prefixIcon: Icon(Icons.event_outlined),
+                  suffixIcon: Icon(Icons.calendar_month_outlined),
+                ),
+                isEmpty: _period == null,
+                child: Text(_period == null ? '' : frenchDate(_period), style: TextStyle(color: p.textMain, fontSize: 15)),
               ),
             ),
             const SizedBox(height: 14),
@@ -712,185 +665,23 @@ class _PregnancyFormState extends State<_PregnancyForm> {
               initialValue: _previousPregnancies,
               decoration: const InputDecoration(
                 labelText: 'Grossesses précédentes',
+                prefixIcon: Icon(Icons.family_restroom_outlined),
               ),
-              items: List.generate(
-                11,
-                (index) =>
-                    DropdownMenuItem(value: index, child: Text('$index')),
-              ),
-              onChanged: (value) =>
-                  setState(() => _previousPregnancies = value ?? 0),
+              items: List.generate(11, (i) => DropdownMenuItem(value: i, child: Text('$i'))),
+              onChanged: (value) => setState(() => _previousPregnancies = value ?? 0),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
+              YayNotice(kind: NoticeKind.error, message: _error!),
             ],
             const SizedBox(height: 18),
             FilledButton(
               onPressed: _sending ? null : _submit,
-              child: _sending
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Enregistrer mon suivi'),
+              child: Text(_sending ? 'Enregistrement…' : 'Enregistrer ma grossesse'),
             ),
           ],
         ),
       ),
-    ),
-  );
-}
-
-class _SymptomForm extends StatefulWidget {
-  const _SymptomForm({required this.api, required this.pregnancyId});
-  final ApiClient api;
-  final int pregnancyId;
-
-  @override
-  State<_SymptomForm> createState() => _SymptomFormState();
-}
-
-class _SymptomFormState extends State<_SymptomForm> {
-  static const _symptoms = {
-    'SAIGNEMENTS': 'Saignements',
-    'DOULEURS_ABDOMINALES': 'Douleurs abdominales',
-    'PERTE_LIQUIDE': 'Perte de liquide',
-    'DIMINUTION_MOUVEMENTS_BEBE': 'Diminution des mouvements du bébé',
-    'FIEVRE_ELEVEE': 'Fièvre élevée',
-    'MAUX_DE_TETE_INTENSES': 'Maux de tête intenses',
-    'OEDEMES_SOUDAINS': 'Œdèmes soudains',
-    'VOMISSEMENTS_SEVERES': 'Vomissements sévères',
-    'AUTRE': 'Autre',
-  };
-  final _description = TextEditingController();
-  String? _symptom;
-  String? _error;
-  bool _sending = false;
-
-  @override
-  void dispose() {
-    _description.dispose();
-    super.dispose();
+    );
   }
-
-  Future<void> _submit() async {
-    if (_symptom == null) {
-      setState(() => _error = 'Sélectionnez le symptôme à signaler.');
-      return;
-    }
-    setState(() {
-      _sending = true;
-      _error = null;
-    });
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await widget.api.post('/alertes', {
-        'grossesseId': widget.pregnancyId,
-        'typeSymptome': _symptom,
-        'description': _description.text.trim(),
-      });
-      if (!mounted) return;
-      Navigator.pop(context);
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Votre signalement a été transmis à l’équipe de suivi.',
-          ),
-        ),
-      );
-    } on ApiException catch (exception) {
-      if (mounted) {
-        setState(() {
-          _sending = false;
-          _error = exception.message;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-    child: Container(
-      decoration: BoxDecoration(
-        color: context.yayCanvas,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: const EdgeInsets.fromLTRB(22, 25, 22, 28),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Signaler un symptôme',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: context.yayInk,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'En cas de symptôme urgent, recherchez immédiatement une aide médicale.',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _symptom,
-              decoration: const InputDecoration(labelText: 'Symptôme'),
-              items: _symptoms.entries
-                  .map(
-                    (entry) => DropdownMenuItem(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) => setState(() => _symptom = value),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _description,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Détails (facultatif)',
-                alignLabelWithHint: true,
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-            const SizedBox(height: 17),
-            FilledButton(
-              onPressed: _sending ? null : _submit,
-              child: _sending
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Transmettre le signalement'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }

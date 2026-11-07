@@ -5,6 +5,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
+/// Rendez-vous de la patiente (et du conjoint) : à venir, historique, demande d'un rendez-vous.
 class AppointmentsScreen extends StatefulWidget {
   const AppointmentsScreen({super.key, required this.api});
   final ApiClient api;
@@ -16,7 +17,24 @@ class AppointmentsScreen extends StatefulWidget {
 class _AppointmentsScreenState extends State<AppointmentsScreen> {
   List<Appointment> _appointments = [];
   bool _loading = true;
+  bool _historique = false;
   String? _error;
+
+  static bool _actif(Appointment a) => a.status == 'PLANIFIE' || a.status == 'CONFIRME';
+
+  /// À venir : rendez-vous actifs dont l'heure n'est pas passée, du plus proche au plus lointain.
+  List<Appointment> get _aVenir {
+    final maintenant = DateTime.now();
+    return _appointments.where((a) => _actif(a) && a.dateTime.isAfter(maintenant)).toList()
+      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+  }
+
+  /// Historique : tout le reste, du plus récent au plus ancien.
+  List<Appointment> get _passes {
+    final avenir = _aVenir.toSet();
+    return _appointments.where((a) => !avenir.contains(a)).toList()
+      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+  }
 
   @override
   void initState() {
@@ -31,12 +49,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     });
     try {
       final result = await widget.api.getList('/rendez-vous/mes-rendez-vous');
-      _appointments =
-          result
-              .whereType<Map<String, dynamic>>()
-              .map(Appointment.fromJson)
-              .toList()
-            ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      _appointments = result.whereType<Map<String, dynamic>>().map(Appointment.fromJson).toList();
     } on ApiException catch (exception) {
       _error = exception.message;
     }
@@ -47,196 +60,186 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _BookingSheet(api: widget.api),
+      useSafeArea: true,
+      builder: (_) => _BookingSheet(api: widget.api),
     );
-    if (result == true) _load();
+    if (result == true) {
+      setState(() => _historique = false);
+      _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Demande envoyée : votre établissement confirmera la date.')),
+        );
+      }
+    }
   }
 
   @override
-  Widget build(BuildContext context) => RefreshIndicator(
-    onRefresh: _load,
-    child: ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Mes rendez-vous',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: context.yayInk,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Le suivi prénatal, plus facile à organiser.',
-                    style: TextStyle(color: context.yayMuted),
-                  ),
-                ],
-              ),
-            ),
-            IconButton.filled(
-              onPressed: _book,
-              tooltip: 'Prendre rendez-vous',
-              icon: const Icon(Icons.add),
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.secondary,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
-        const SectionHeading('À venir'),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.all(40),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (_error != null)
-          MessagePanel(
-            icon: Icons.wifi_off_outlined,
-            title: 'Chargement impossible',
-            message: _error!,
-            action: 'Réessayer',
-            onAction: _load,
-          )
-        else if (_appointments.isEmpty)
-          MessagePanel(
-            icon: Icons.event_available_outlined,
-            title: 'Aucun rendez-vous pour le moment',
-            message:
-                'Ajoutez votre prochaine consultation pour garder votre suivi organisé.',
-            action: 'Prendre rendez-vous',
-            onAction: _book,
-          )
-        else
-          ..._appointments.map(
-            (appointment) => Padding(
-              padding: const EdgeInsets.only(bottom: 11),
-              child: _AppointmentTile(appointment: appointment),
-            ),
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final liste = _historique ? _passes : _aVenir;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+        children: [
+          Text('Mes rendez-vous', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: p.textMain)),
+          const SizedBox(height: 2),
+          Text('Le suivi prénatal, plus facile à organiser.', style: TextStyle(color: p.textMuted, fontSize: 14)),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: _book,
+            icon: const Icon(Icons.add, size: 20),
+            label: const Text('Demander un rendez-vous'),
           ),
-        const SizedBox(height: 14),
-        ContentCard(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.info_outline,
-                color: Theme.of(context).colorScheme.secondary,
-                size: 20,
-              ),
-              SizedBox(width: 11),
-              Expanded(
-                child: Text(
-                  'Les demandes sont transmises à votre équipe de santé. Contactez directement votre centre pour toute confirmation urgente.',
-                  style: TextStyle(
-                    color: context.yayMuted,
-                    fontSize: 12,
-                    height: 1.55,
-                  ),
-                ),
-              ),
+          const SizedBox(height: 16),
+          _Onglets(
+            historique: _historique,
+            nbAVenir: _loading ? null : _aVenir.length,
+            nbPasses: _loading ? null : _passes.length,
+            onChanged: (h) => setState(() => _historique = h),
+          ),
+          const SizedBox(height: 14),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement des rendez-vous')),
+            )
+          else if (_error != null)
+            MessagePanel(
+              icon: Icons.cloud_off_outlined,
+              title: 'Chargement impossible',
+              message: _error!,
+              action: 'Réessayer',
+              onAction: _load,
+            )
+          else if (liste.isEmpty)
+            _historique
+                ? const MessagePanel(
+                    icon: Icons.history,
+                    title: 'Aucun rendez-vous passé',
+                    message: 'Vos rendez-vous terminés ou annulés apparaîtront ici.',
+                  )
+                : MessagePanel(
+                    icon: Icons.event_available_outlined,
+                    title: 'Aucun rendez-vous à venir',
+                    message: 'Demandez votre prochaine consultation pour garder votre suivi organisé.',
+                    action: 'Demander un rendez-vous',
+                    onAction: _book,
+                  )
+          else
+            for (final a in liste) ...[
+              _AppointmentTile(appointment: a, passe: _historique),
+              const SizedBox(height: 10),
             ],
+          const SizedBox(height: 8),
+          const YayNotice(
+            kind: NoticeKind.info,
+            message: 'Les demandes sont transmises à votre établissement, qui confirme la date. '
+                'Pour toute urgence, contactez-le directement.',
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
-class _AppointmentTile extends StatelessWidget {
-  const _AppointmentTile({required this.appointment});
-  final Appointment appointment;
+class _Onglets extends StatelessWidget {
+  const _Onglets({required this.historique, required this.nbAVenir, required this.nbPasses, required this.onChanged});
+  final bool historique;
+  final int? nbAVenir;
+  final int? nbPasses;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final isCancelled = appointment.status == 'ANNULE';
-    return ContentCard(
+    final p = context.yay;
+    Widget onglet(String titre, int? nombre, bool actif, VoidCallback onTap) => Expanded(
+      child: Semantics(
+        button: true,
+        selected: actif,
+        child: Material(
+          color: actif ? p.tealDark : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Center(
+                child: Text(
+                  nombre == null ? titre : '$titre ($nombre)',
+                  style: TextStyle(color: actif ? p.onStrong : p.textMuted, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: p.borderLight, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          onglet('À venir', nbAVenir, !historique, () => onChanged(false)),
+          const SizedBox(width: 4),
+          onglet('Historique', nbPasses, historique, () => onChanged(true)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppointmentTile extends StatelessWidget {
+  const _AppointmentTile({required this.appointment, required this.passe});
+  final Appointment appointment;
+  final bool passe;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    final (libelle, fond, texte) = appointmentStatus(context, appointment.status);
+    final d = appointment.dateTime;
+    final heure = '${d.hour.toString().padLeft(2, '0')}h${d.minute.toString().padLeft(2, '0')}';
+    final details = [
+      heure,
+      if (appointment.facility?.isNotEmpty == true) appointment.facility!,
+    ].join(' · ');
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: p.borderLight, width: 1.5),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 53,
-            height: 59,
-            decoration: BoxDecoration(
-              color: isCancelled
-                  ? context.yayRoseContainer
-                  : context.yayTealContainer,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '${appointment.dateTime.day}',
-                  style: TextStyle(
-                    color: isCancelled
-                        ? Theme.of(context).colorScheme.onPrimaryContainer
-                        : Theme.of(context).colorScheme.onSecondaryContainer,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  '${appointment.dateTime.month}/${appointment.dateTime.year}',
-                  style: TextStyle(color: context.yayMuted, fontSize: 9),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 13),
+          Opacity(opacity: passe ? 0.75 : 1, child: DateBlock(d)),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  appointmentType(appointment.type),
-                  style: TextStyle(
-                    color: context.yayInk,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  frenchDate(appointment.dateTime, includeTime: true),
-                  style: TextStyle(color: context.yayMuted, fontSize: 12),
-                ),
-                if (appointment.facility?.isNotEmpty == true) ...[
+                Text(appointmentType(appointment.type),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: p.textMain)),
+                const SizedBox(height: 2),
+                Text(details, style: TextStyle(color: p.textMuted, fontSize: 13)),
+                if (appointment.professional?.isNotEmpty == true)
+                  Text(appointment.professional!, style: TextStyle(color: p.textMuted, fontSize: 13)),
+                if (appointment.reason?.isNotEmpty == true) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    appointment.facility!,
-                    style: TextStyle(color: context.yayMuted, fontSize: 11),
-                  ),
+                  Text('Motif : ${appointment.reason!}',
+                      maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: p.textMuted, fontSize: 12, fontStyle: FontStyle.italic)),
                 ],
-                const SizedBox(height: 7),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isCancelled
-                        ? context.yayRoseContainer
-                        : context.yayTealContainer,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _status(appointment.status),
-                    style: TextStyle(
-                      color: isCancelled
-                          ? Theme.of(context).colorScheme.onPrimaryContainer
-                          : Theme.of(context).colorScheme.onSecondaryContainer,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+                const SizedBox(height: 8),
+                StatusPill(libelle, background: fond, foreground: texte),
               ],
             ),
           ),
@@ -244,16 +247,9 @@ class _AppointmentTile extends StatelessWidget {
       ),
     );
   }
-
-  String _status(String status) => switch (status) {
-    'CONFIRME' => 'Confirmé',
-    'PLANIFIE' => 'Planifié',
-    'TERMINE' => 'Terminé',
-    'ANNULE' => 'Annulé',
-    'ABSENT' => 'Absent',
-    _ => status,
-  };
 }
+
+// ==================== Demande de rendez-vous ====================
 
 class _BookingSheet extends StatefulWidget {
   const _BookingSheet({required this.api});
@@ -264,16 +260,17 @@ class _BookingSheet extends StatefulWidget {
 }
 
 class _BookingSheetState extends State<_BookingSheet> {
-  static const _types = {
-    'CONSULTATION_PRENATALE': 'Consultation prénatale',
-    'ECHOGRAPHIE': 'Échographie',
-    'VACCINATION': 'Vaccination',
-    'EXAMEN_LABORATOIRE': 'Examen de laboratoire',
-    'AUTRE': 'Autre',
-  };
+  static const _types = <(String, String, IconData)>[
+    ('CONSULTATION_PRENATALE', 'Consultation prénatale', Icons.medical_services_outlined),
+    ('ECHOGRAPHIE', 'Échographie', Icons.monitor_heart_outlined),
+    ('VACCINATION', 'Vaccination', Icons.vaccines_outlined),
+    ('EXAMEN_LABORATOIRE', 'Examen de laboratoire', Icons.science_outlined),
+    ('AUTRE', 'Autre', Icons.event_note_outlined),
+  ];
   final _reason = TextEditingController();
   String _type = 'CONSULTATION_PRENATALE';
-  DateTime? _dateTime;
+  DateTime? _date;
+  TimeOfDay? _time;
   bool _sending = false;
   String? _error;
 
@@ -283,64 +280,53 @@ class _BookingSheetState extends State<_BookingSheet> {
     super.dispose();
   }
 
-  Future<void> _selectDateTime() async {
+  Future<void> _selectDate() async {
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
-      initialDate: now.add(const Duration(days: 1)),
+      initialDate: _date ?? now.add(const Duration(days: 1)),
       firstDate: now,
-      lastDate: DateTime(now.year + 2),
+      lastDate: DateTime(now.year + 1, now.month, now.day),
       locale: const Locale('fr', 'FR'),
+      helpText: 'Date souhaitée',
     );
-    if (date == null || !mounted) return;
+    if (date != null) setState(() => _date = date);
+  }
+
+  Future<void> _selectTime() async {
     final time = await showTimePicker(
       context: context,
-      initialTime: const TimeOfDay(hour: 9, minute: 0),
+      initialTime: _time ?? const TimeOfDay(hour: 9, minute: 0),
+      helpText: 'Heure souhaitée',
     );
-    if (time != null) {
-      setState(
-        () => _dateTime = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          time.hour,
-          time.minute,
-        ),
-      );
-    }
+    if (time != null) setState(() => _time = time);
   }
 
   Future<void> _submit() async {
-    if (_dateTime == null || !_dateTime!.isAfter(DateTime.now())) {
-      setState(
-        () => _error = 'Choisissez une date et une heure dans le futur.',
-      );
+    final d = _date;
+    final t = _time;
+    if (d == null || t == null) {
+      setState(() => _error = 'Choisissez une date et une heure.');
+      return;
+    }
+    final quand = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+    if (!quand.isAfter(DateTime.now())) {
+      setState(() => _error = 'Choisissez une date et une heure dans le futur.');
       return;
     }
     setState(() {
       _sending = true;
       _error = null;
     });
-    final date = _dateTime!;
-    final messenger = ScaffoldMessenger.of(context);
+    String deux(int v) => v.toString().padLeft(2, '0');
     try {
+      final motif = _reason.text.trim();
       await widget.api.post('/rendez-vous', {
-        'dateHeure':
-            '${date.year.toString().padLeft(4, '0')}-'
-            '${date.month.toString().padLeft(2, '0')}-'
-            '${date.day.toString().padLeft(2, '0')}T'
-            '${date.hour.toString().padLeft(2, '0')}:'
-            '${date.minute.toString().padLeft(2, '0')}:00',
+        'dateHeure': '${quand.year}-${deux(quand.month)}-${deux(quand.day)}T${deux(quand.hour)}:${deux(quand.minute)}:00',
         'type': _type,
-        'motif': _reason.text.trim(),
+        if (motif.isNotEmpty) 'motif': motif,
       });
-      if (!mounted) return;
-      Navigator.pop(context, true);
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Votre demande de rendez-vous a été enregistrée.'),
-        ),
-      );
+      if (mounted) Navigator.pop(context, true);
     } on ApiException catch (exception) {
       if (mounted) {
         setState(() {
@@ -352,89 +338,116 @@ class _BookingSheetState extends State<_BookingSheet> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-    child: Container(
-      decoration: BoxDecoration(
-        color: context.yayCanvas,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: const EdgeInsets.fromLTRB(22, 25, 22, 28),
-      child: SafeArea(
-        top: false,
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Prendre rendez-vous',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: context.yayInk,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Choisissez un créneau souhaité et votre type de consultation.',
-              style: TextStyle(color: context.yayMuted, height: 1.5),
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(color: p.tealSoft, borderRadius: BorderRadius.circular(14)),
+                  child: Icon(Icons.calendar_month_outlined, color: p.tealInk),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Demander un rendez-vous',
+                          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: p.textMain)),
+                      Text('Votre établissement confirmera la date.', style: TextStyle(fontSize: 13, color: p.textMuted)),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 18),
-            OutlinedButton.icon(
-              onPressed: _selectDateTime,
-              icon: const Icon(Icons.event_outlined),
-              label: Text(
-                _dateTime == null
-                    ? 'Choisir une date et une heure'
-                    : frenchDate(_dateTime, includeTime: true),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _Choix(
+                    label: 'Date souhaitée',
+                    valeur: _date == null ? null : frenchDate(_date),
+                    icone: Icons.event_outlined,
+                    onTap: _selectDate,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: _Choix(
+                    label: 'Heure',
+                    valeur: _time == null ? null : '${_time!.hour.toString().padLeft(2, '0')}h${_time!.minute.toString().padLeft(2, '0')}',
+                    icone: Icons.schedule,
+                    onTap: _selectTime,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 13),
-            DropdownButtonFormField<String>(
-              initialValue: _type,
-              decoration: const InputDecoration(
-                labelText: 'Type de rendez-vous',
-              ),
-              items: _types.entries
-                  .map(
-                    (entry) => DropdownMenuItem(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) => setState(() => _type = value ?? _type),
+            const SizedBox(height: 16),
+            Text('Type de rendez-vous', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textMain)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (valeur, libelle, icone) in _types)
+                  ChoiceChip(
+                    avatar: Icon(icone, size: 18, color: _type == valeur ? p.onStrong : p.tealInk),
+                    showCheckmark: false,
+                    label: Text(libelle),
+                    selected: _type == valeur,
+                    onSelected: (_) => setState(() => _type = valeur),
+                  ),
+              ],
             ),
-            const SizedBox(height: 13),
+            const SizedBox(height: 16),
             TextField(
               controller: _reason,
               maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Motif (facultatif)',
-              ),
+              maxLength: 500,
+              decoration: const InputDecoration(labelText: 'Motif (facultatif)', alignLabelWithHint: true),
             ),
             if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
+              const SizedBox(height: 4),
+              YayNotice(kind: NoticeKind.error, message: _error!),
             ],
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             FilledButton(
               onPressed: _sending ? null : _submit,
-              child: _sending
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Envoyer ma demande'),
+              child: Text(_sending ? 'Envoi…' : 'Envoyer ma demande'),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Champ de choix (date ou heure) ouvrant un sélecteur.
+class _Choix extends StatelessWidget {
+  const _Choix({required this.label, required this.valeur, required this.icone, required this.onTap});
+  final String label;
+  final String? valeur;
+  final IconData icone;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(14),
+    child: InputDecorator(
+      isEmpty: valeur == null,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icone)),
+      child: Text(valeur ?? '', style: TextStyle(color: context.yay.textMain, fontSize: 15)),
     ),
   );
 }
