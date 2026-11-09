@@ -27,12 +27,16 @@ void main() {
         'semaineActuelle': 18,
         'dateDernieresRegles': '2026-01-01',
         'datePrevueAccouchement': '2026-10-08',
+        'debutPeriodeTerme': '2026-09-17',
+        'finPeriodeTerme': '2026-10-21',
         'joursRestants': 60,
         'grossesseARisque': false,
       });
 
       expect(pregnancy.week, 18);
       expect(pregnancy.dueDate, DateTime(2026, 10, 8));
+      expect(pregnancy.termStart, DateTime(2026, 9, 17));
+      expect(pregnancy.termEnd, DateTime(2026, 10, 21));
       expect(pregnancy.daysRemaining, 60);
     });
 

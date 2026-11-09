@@ -41,6 +41,8 @@ class Pregnancy {
     this.week,
     this.trimester,
     this.dueDate,
+    this.termStart,
+    this.termEnd,
     this.periodDate,
     this.daysRemaining,
     this.atRisk = false,
@@ -50,7 +52,12 @@ class Pregnancy {
   final String status;
   final int? week;
   final String? trimester;
+  /// Terme estimé (règle de Naegele : dernières règles + 280 jours), pas une date certaine.
   final DateTime? dueDate;
+
+  /// Période d'accouchement à terme : 37 SA + 0 j à 41 SA + 6 j.
+  final DateTime? termStart;
+  final DateTime? termEnd;
   final DateTime? periodDate;
   final int? daysRemaining;
   final bool atRisk;
@@ -61,6 +68,8 @@ class Pregnancy {
     week: (json['semaineActuelle'] as num?)?.toInt(),
     trimester: json['trimestre'] as String?,
     dueDate: _date(json['datePrevueAccouchement']),
+    termStart: _date(json['debutPeriodeTerme']),
+    termEnd: _date(json['finPeriodeTerme']),
     periodDate: _date(json['dateDernieresRegles']),
     daysRemaining: (json['joursRestants'] as num?)?.toInt(),
     atRisk: json['grossesseARisque'] as bool? ?? false,

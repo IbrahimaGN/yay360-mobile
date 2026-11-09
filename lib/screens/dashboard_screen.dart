@@ -223,7 +223,14 @@ class _CarteGrossesse extends StatelessWidget {
                 ],
                 const SizedBox(height: 10),
                 if (pregnancy.dueDate != null)
-                  _Fait(icone: Icons.event_outlined, texte: 'Terme prévu : ${frenchDate(pregnancy.dueDate)}'),
+                  _Fait(icone: Icons.event_outlined, texte: 'Terme estimé : ${frenchDate(pregnancy.dueDate)}'),
+                if (pregnancy.termStart != null && pregnancy.termEnd != null) ...[
+                  const SizedBox(height: 4),
+                  _Fait(
+                    icone: Icons.date_range_outlined,
+                    texte: 'À terme entre le ${frenchDate(pregnancy.termStart)} et le ${frenchDate(pregnancy.termEnd)}',
+                  ),
+                ],
                 if (pregnancy.daysRemaining != null) ...[
                   const SizedBox(height: 4),
                   _Fait(icone: Icons.hourglass_bottom, texte: '${pregnancy.daysRemaining} jours restants'),
