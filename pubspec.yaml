@@ -38,6 +38,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_secure_storage: ^11.2.0
   http: ^1.6.0
+  # Partage du dossier PDF (enregistrer, ouvrir, envoyer) via la feuille de partage du système
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:
