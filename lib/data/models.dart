@@ -6,9 +6,13 @@ class UserSession {
     required this.firstName,
     required this.lastName,
     required this.role,
+    this.refreshToken,
   });
 
   final String token;
+
+  /// Session longue (« rester connecté ») : jeton à échanger contre un nouveau à chaque ouverture.
+  final String? refreshToken;
   final int id;
   final String email;
   final String firstName;
@@ -22,6 +26,7 @@ class UserSession {
     firstName: json['prenom'] as String,
     lastName: json['nom'] as String,
     role: json['role'] as String,
+    refreshToken: json['jetonRafraichissement'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -31,7 +36,24 @@ class UserSession {
     'prenom': firstName,
     'nom': lastName,
     'role': role,
+    if (refreshToken != null) 'jetonRafraichissement': refreshToken,
   };
+}
+
+/// Réponse de l'étape « numéro de téléphone » de la connexion mobile.
+class MobileStart {
+  const MobileStart({required this.step, this.maskedEmail, this.message});
+
+  /// `PIN` (saisir le PIN), `CODE_ENVOYE` (code envoyé par e-mail) ou `INSCRIPTION` (numéro inconnu).
+  final String step;
+  final String? maskedEmail;
+  final String? message;
+
+  factory MobileStart.fromJson(Map<String, dynamic> json) => MobileStart(
+    step: json['etape'] as String? ?? 'INSCRIPTION',
+    maskedEmail: json['emailMasque'] as String?,
+    message: json['message'] as String?,
+  );
 }
 
 class Pregnancy {
@@ -41,6 +63,8 @@ class Pregnancy {
     this.week,
     this.trimester,
     this.dueDate,
+    this.termStart,
+    this.termEnd,
     this.periodDate,
     this.daysRemaining,
     this.atRisk = false,
@@ -50,7 +74,12 @@ class Pregnancy {
   final String status;
   final int? week;
   final String? trimester;
+  /// Terme estimé (règle de Naegele : dernières règles + 280 jours), pas une date certaine.
   final DateTime? dueDate;
+
+  /// Période d'accouchement à terme : 37 SA + 0 j à 41 SA + 6 j.
+  final DateTime? termStart;
+  final DateTime? termEnd;
   final DateTime? periodDate;
   final int? daysRemaining;
   final bool atRisk;
@@ -61,6 +90,8 @@ class Pregnancy {
     week: (json['semaineActuelle'] as num?)?.toInt(),
     trimester: json['trimestre'] as String?,
     dueDate: _date(json['datePrevueAccouchement']),
+    termStart: _date(json['debutPeriodeTerme']),
+    termEnd: _date(json['finPeriodeTerme']),
     periodDate: _date(json['dateDernieresRegles']),
     daysRemaining: (json['joursRestants'] as num?)?.toInt(),
     atRisk: json['grossesseARisque'] as bool? ?? false,

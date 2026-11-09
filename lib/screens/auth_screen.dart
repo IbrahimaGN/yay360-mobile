@@ -1,10 +1,18 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../data/models.dart';
 import '../state/auth_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-/// Connexion, inscription de la patiente et accès au compte conjoint (sur invitation).
+/// Étapes de la connexion par téléphone.
+enum _Etape { telephone, pin, inscription, code, nouveauPin }
+
+/// Connexion par téléphone et PIN (code de vérification envoyé par e-mail), connexion par e-mail
+/// et accès au compte conjoint (sur invitation).
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, required this.auth, this.onToggleTheme});
 
@@ -17,42 +25,116 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _email = TextEditingController();
-  final _password = TextEditingController();
+  final _phone = TextEditingController(text: '+221 ');
+  final _pin = TextEditingController();
+  final _code = TextEditingController();
+  final _newPin = TextEditingController();
+  final _confirmPin = TextEditingController();
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
-  final _phone = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
   final _dateOfBirth = TextEditingController();
-  bool _registerMode = false;
+
+  bool _modeEmail = false;
+  _Etape _etape = _Etape.telephone;
+  bool _stayConnected = true;
   bool _hidePassword = true;
+  String? _maskedEmail;
+  String? _pinToken;
+  DateTime? _resendAt;
+  Timer? _ticker;
+
+  String get _phoneValue => normalizePhone(_phone.text);
 
   @override
   void dispose() {
-    _email.dispose();
-    _password.dispose();
-    _firstName.dispose();
-    _lastName.dispose();
-    _phone.dispose();
-    _dateOfBirth.dispose();
+    _ticker?.cancel();
+    for (final c in [_phone, _pin, _code, _newPin, _confirmPin, _firstName, _lastName, _email, _password, _dateOfBirth]) {
+      c.dispose();
+    }
     super.dispose();
+  }
+
+  void _goTo(_Etape etape) => setState(() {
+    _etape = etape;
+    widget.auth.error = null;
+  });
+
+  void _startResendCountdown() {
+    _resendAt = DateTime.now().add(const Duration(seconds: 60));
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return timer.cancel();
+      setState(() {});
+      if (DateTime.now().isAfter(_resendAt!)) timer.cancel();
+    });
+  }
+
+  int get _resendSeconds {
+    final at = _resendAt;
+    if (at == null) return 0;
+    final remaining = at.difference(DateTime.now()).inSeconds;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  void _onStart(MobileStart? result) {
+    if (result == null || !mounted) return setState(() {});
+    switch (result.step) {
+      case 'PIN':
+        _pin.clear();
+        _goTo(_Etape.pin);
+      case 'CODE_ENVOYE':
+        _maskedEmail = result.maskedEmail;
+        _code.clear();
+        _startResendCountdown();
+        _goTo(_Etape.code);
+      default:
+        _goTo(_Etape.inscription);
+    }
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    final ok = _registerMode
-        ? await widget.auth.register({
-            'prenom': _firstName.text.trim(),
-            'nom': _lastName.text.trim(),
-            'email': _email.text.trim(),
-            'password': _password.text,
-            'telephone': normalizePhone(_phone.text),
-            'dateNaissance': _dateOfBirth.text,
-            'role': 'FEMME_ENCEINTE',
-          })
-        : await widget.auth.login(_email.text.trim(), _password.text);
-    if (!mounted) return;
-    if (!ok) setState(() {});
+    final auth = widget.auth;
+    if (_modeEmail) {
+      await auth.login(_email.text.trim(), _password.text);
+      if (mounted) setState(() {});
+      return;
+    }
+    switch (_etape) {
+      case _Etape.telephone:
+        _onStart(await auth.startWithPhone(_phoneValue));
+      case _Etape.pin:
+        await auth.loginWithPin(_phoneValue, _pin.text, stayConnected: _stayConnected);
+        if (mounted) setState(() {});
+      case _Etape.inscription:
+        _onStart(await auth.registerWithPhone({
+          'prenom': _firstName.text.trim(),
+          'nom': _lastName.text.trim(),
+          'email': _email.text.trim(),
+          'telephone': _phoneValue,
+          'dateNaissance': _dateOfBirth.text,
+        }));
+      case _Etape.code:
+        final token = await auth.verifyCode(_phoneValue, _code.text);
+        if (token != null && mounted) {
+          _pinToken = token;
+          _newPin.clear();
+          _confirmPin.clear();
+          _goTo(_Etape.nouveauPin);
+        } else if (mounted) {
+          setState(() {});
+        }
+      case _Etape.nouveauPin:
+        await auth.setPin(_pinToken!, _newPin.text, stayConnected: _stayConnected);
+        if (mounted) setState(() {});
+    }
   }
+
+  Future<void> _forgotPin() async => _onStart(await widget.auth.startWithPhone(_phoneValue, forgotPin: true));
+
+  Future<void> _resendCode() async => _onStart(await widget.auth.startWithPhone(_phoneValue, forgotPin: true));
 
   Future<void> _pickBirthDate() async {
     final today = DateTime.now();
@@ -80,16 +162,51 @@ class _AuthScreenState extends State<AuthScreen> {
     if (result == true && mounted) setState(() {});
   }
 
-  void _changerMode(bool inscription) => setState(() {
-    _registerMode = inscription;
+  void _changerMode(bool email) => setState(() {
+    _modeEmail = email;
     widget.auth.error = null;
   });
+
+  // ==================== Textes de chaque étape ====================
+
+  (String, String) get _titres {
+    if (_modeEmail) return ('Accédez à votre espace', 'Avec l’adresse e-mail et le mot de passe de votre compte.');
+    return switch (_etape) {
+      _Etape.telephone => ('Accédez à votre espace', 'Avec votre numéro de téléphone.'),
+      _Etape.pin => ('Bon retour !', 'Saisissez votre code PIN à 4 chiffres.'),
+      _Etape.inscription => (
+          'Créez votre espace',
+          'Ce numéro est nouveau. Votre code de vérification sera envoyé à votre adresse e-mail.',
+        ),
+      _Etape.code => (
+          'Vérifiez votre identité',
+          'Saisissez le code à 6 chiffres envoyé à ${_maskedEmail ?? 'votre adresse e-mail'}. '
+              'Pensez à regarder dans les courriers indésirables.',
+        ),
+      _Etape.nouveauPin => (
+          'Choisissez votre code PIN',
+          '4 chiffres, à garder secret. Évitez 0000, 1234 ou votre année de naissance.',
+        ),
+    };
+  }
+
+  String get _libelleBouton {
+    if (_modeEmail) return 'Se connecter';
+    return switch (_etape) {
+      _Etape.telephone => 'Continuer',
+      _Etape.pin => 'Se connecter',
+      _Etape.inscription => 'Recevoir mon code',
+      _Etape.code => 'Valider le code',
+      _Etape.nouveauPin => 'Valider mon PIN',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = context.yay;
     final sombre = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final (titre, sousTitre) = _titres;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -128,102 +245,15 @@ class _AuthScreenState extends State<AuthScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _ModeTabs(
-                            inscription: _registerMode,
-                            onChanged: _changerMode,
-                          ),
-                          const SizedBox(height: 18),
-                          Text(
-                            _registerMode ? 'Créez votre espace' : 'Accédez à votre espace',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: p.textMain),
-                          ),
+                          if (_modeEmail || _etape == _Etape.telephone) ...[
+                            _ModeTabs(gauche: 'Téléphone', droite: 'E-mail', droiteActive: _modeEmail, onChanged: _changerMode),
+                            const SizedBox(height: 18),
+                          ],
+                          Text(titre, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: p.textMain)),
                           const SizedBox(height: 4),
-                          Text(
-                            _registerMode
-                                ? 'Future maman : suivez votre grossesse et vos rendez-vous.'
-                                : 'Avec l’adresse e-mail de votre compte.',
-                            style: TextStyle(fontSize: 13, color: p.textMuted, height: 1.45),
-                          ),
+                          Text(sousTitre, style: TextStyle(fontSize: 13, color: p.textMuted, height: 1.45)),
                           const SizedBox(height: 18),
-                          if (_registerMode) ...[
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(child: _nameField(_firstName, 'Prénom', 'Fatou')),
-                                const SizedBox(width: 10),
-                                Expanded(child: _nameField(_lastName, 'Nom', 'Ndiaye')),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                          ],
-                          TextFormField(
-                            controller: _email,
-                            keyboardType: TextInputType.emailAddress,
-                            autofillHints: const [AutofillHints.email],
-                            textInputAction: TextInputAction.next,
-                            validator: validateEmail,
-                            decoration: const InputDecoration(
-                              labelText: 'Adresse e-mail',
-                              hintText: 'nom@exemple.sn',
-                              prefixIcon: Icon(Icons.mail_outline),
-                            ),
-                          ),
-                          if (_registerMode) ...[
-                            const SizedBox(height: 14),
-                            TextFormField(
-                              controller: _phone,
-                              keyboardType: TextInputType.phone,
-                              autofillHints: const [AutofillHints.telephoneNumber],
-                              validator: validatePhone,
-                              decoration: const InputDecoration(
-                                labelText: 'Téléphone',
-                                hintText: '+221 77 000 00 00',
-                                prefixIcon: Icon(Icons.phone_outlined),
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            TextFormField(
-                              controller: _dateOfBirth,
-                              readOnly: true,
-                              onTap: _pickBirthDate,
-                              validator: (value) => value == null || value.isEmpty
-                                  ? 'Choisissez votre date de naissance.'
-                                  : null,
-                              decoration: const InputDecoration(
-                                labelText: 'Date de naissance',
-                                hintText: 'AAAA-MM-JJ',
-                                prefixIcon: Icon(Icons.cake_outlined),
-                                suffixIcon: Icon(Icons.calendar_month_outlined),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _password,
-                            obscureText: _hidePassword,
-                            autofillHints: [_registerMode ? AutofillHints.newPassword : AutofillHints.password],
-                            onFieldSubmitted: (_) => _submit(),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) return 'Saisissez votre mot de passe.';
-                              if (_registerMode && !PasswordRules.valide(value)) return PasswordRules.aide;
-                              return null;
-                            },
-                            decoration: InputDecoration(
-                              labelText: 'Mot de passe',
-                              hintText: _registerMode ? '8 caractères minimum' : 'Votre mot de passe',
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                tooltip: _hidePassword ? 'Afficher le mot de passe' : 'Masquer le mot de passe',
-                                style: IconButton.styleFrom(backgroundColor: Colors.transparent, side: BorderSide.none),
-                                onPressed: () => setState(() => _hidePassword = !_hidePassword),
-                                icon: Icon(_hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                              ),
-                            ),
-                          ),
-                          if (_registerMode) ...[
-                            const SizedBox(height: 10),
-                            PasswordRules(controller: _password),
-                          ],
+                          ..._champs(),
                           if (widget.auth.error != null) ...[
                             const SizedBox(height: 14),
                             YayNotice(kind: NoticeKind.error, message: widget.auth.error!),
@@ -240,25 +270,26 @@ class _AuthScreenState extends State<AuthScreen> {
                                         child: CircularProgressIndicator(strokeWidth: 2, color: p.textMuted),
                                       ),
                                       const SizedBox(width: 10),
-                                      Text(_registerMode ? 'Création…' : 'Connexion en cours…'),
+                                      const Text('Patientez…'),
                                     ],
                                   )
                                 : Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(_registerMode ? 'Créer mon espace' : 'Se connecter'),
+                                      Text(_libelleBouton),
                                       const SizedBox(width: 8),
                                       const Icon(Icons.arrow_forward, size: 18),
                                     ],
                                   ),
                           ),
+                          ..._liensSecondaires(),
                         ],
                       ),
                     ),
                   ),
 
                   // ── Conjoint ──────────────────────────────────────────
-                  if (!_registerMode) ...[
+                  if (!_modeEmail && _etape == _Etape.telephone) ...[
                     const SizedBox(height: 14),
                     OutlinedButton.icon(
                       onPressed: _openPartnerInvitation,
@@ -287,6 +318,195 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
+  // ==================== Champs de chaque étape ====================
+
+  List<Widget> _champs() {
+    if (_modeEmail) {
+      return [
+        _emailField(),
+        const SizedBox(height: 14),
+        TextFormField(
+          controller: _password,
+          obscureText: _hidePassword,
+          autofillHints: const [AutofillHints.password],
+          onFieldSubmitted: (_) => _submit(),
+          validator: (value) => value == null || value.isEmpty ? 'Saisissez votre mot de passe.' : null,
+          decoration: InputDecoration(
+            labelText: 'Mot de passe',
+            hintText: 'Votre mot de passe',
+            prefixIcon: const Icon(Icons.lock_outline),
+            suffixIcon: IconButton(
+              tooltip: _hidePassword ? 'Afficher le mot de passe' : 'Masquer le mot de passe',
+              style: IconButton.styleFrom(backgroundColor: Colors.transparent, side: BorderSide.none),
+              onPressed: () => setState(() => _hidePassword = !_hidePassword),
+              icon: Icon(_hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+            ),
+          ),
+        ),
+      ];
+    }
+    return switch (_etape) {
+      _Etape.telephone => [
+          TextFormField(
+            controller: _phone,
+            keyboardType: TextInputType.phone,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) => _submit(),
+            validator: validatePhone,
+            decoration: const InputDecoration(
+              labelText: 'Numéro de téléphone',
+              hintText: '+221 77 000 00 00',
+              prefixIcon: Icon(Icons.phone_outlined),
+            ),
+          ),
+        ],
+      _Etape.pin => [
+          _numeroRappel(),
+          const SizedBox(height: 12),
+          _pinField(_pin, 'Code PIN', autofocus: true),
+          const SizedBox(height: 6),
+          _resterConnectee(),
+        ],
+      _Etape.inscription => [
+          _numeroRappel(),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _nameField(_firstName, 'Prénom', 'Fatou')),
+              const SizedBox(width: 10),
+              Expanded(child: _nameField(_lastName, 'Nom', 'Ndiaye')),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _emailField(),
+          const SizedBox(height: 14),
+          TextFormField(
+            controller: _dateOfBirth,
+            readOnly: true,
+            onTap: _pickBirthDate,
+            validator: (value) => value == null || value.isEmpty ? 'Choisissez votre date de naissance.' : null,
+            decoration: const InputDecoration(
+              labelText: 'Date de naissance',
+              hintText: 'AAAA-MM-JJ',
+              prefixIcon: Icon(Icons.cake_outlined),
+              suffixIcon: Icon(Icons.calendar_month_outlined),
+            ),
+          ),
+        ],
+      _Etape.code => [
+          TextFormField(
+            controller: _code,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            autofillHints: const [AutofillHints.oneTimeCode],
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+            onFieldSubmitted: (_) => _submit(),
+            validator: (value) => value != null && RegExp(r'^\d{6}$').hasMatch(value)
+                ? null
+                : 'Le code contient 6 chiffres.',
+            style: const TextStyle(fontSize: 22, letterSpacing: 8, fontWeight: FontWeight.w600),
+            decoration: const InputDecoration(
+              labelText: 'Code de vérification',
+              hintText: '000000',
+              prefixIcon: Icon(Icons.mark_email_read_outlined),
+            ),
+          ),
+        ],
+      _Etape.nouveauPin => [
+          _pinField(_newPin, 'Nouveau code PIN', autofocus: true, validator: validatePin),
+          const SizedBox(height: 14),
+          _pinField(
+            _confirmPin,
+            'Confirmez le code PIN',
+            validator: (value) => value != _newPin.text ? 'Les deux codes PIN sont différents.' : null,
+          ),
+          const SizedBox(height: 6),
+          _resterConnectee(),
+        ],
+    };
+  }
+
+  List<Widget> _liensSecondaires() {
+    if (_modeEmail || _etape == _Etape.telephone) return const [];
+    final occupe = widget.auth.isSubmitting;
+    return [
+      const SizedBox(height: 8),
+      Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        children: [
+          TextButton(
+            onPressed: occupe ? null : () => _goTo(_Etape.telephone),
+            child: const Text('Changer de numéro'),
+          ),
+          if (_etape == _Etape.pin)
+            TextButton(onPressed: occupe ? null : _forgotPin, child: const Text('PIN oublié ?')),
+          if (_etape == _Etape.code)
+            TextButton(
+              onPressed: occupe || _resendSeconds > 0 ? null : _resendCode,
+              child: Text(_resendSeconds > 0 ? 'Renvoyer le code (${_resendSeconds}s)' : 'Renvoyer le code'),
+            ),
+        ],
+      ),
+    ];
+  }
+
+  Widget _numeroRappel() {
+    final p = context.yay;
+    return Row(
+      children: [
+        Icon(Icons.phone_outlined, size: 18, color: p.textMuted),
+        const SizedBox(width: 8),
+        Text(_phone.text.trim(), style: TextStyle(color: p.textMain, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  // Material transparent : l'effet visuel du toucher reste visible sur le fond de la carte
+  Widget _resterConnectee() => Material(
+    type: MaterialType.transparency,
+    child: CheckboxListTile(
+      value: _stayConnected,
+      onChanged: (value) => setState(() => _stayConnected = value ?? false),
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      controlAffinity: ListTileControlAffinity.leading,
+      title: const Text('Rester connectée sur ce téléphone'),
+      subtitle: const Text('30 jours, prolongés à chaque ouverture. À éviter sur un téléphone partagé.'),
+    ),
+  );
+
+  Widget _pinField(
+    TextEditingController controller,
+    String label, {
+    bool autofocus = false,
+    FormFieldValidator<String>? validator,
+  }) => TextFormField(
+    controller: controller,
+    autofocus: autofocus,
+    obscureText: true,
+    keyboardType: TextInputType.number,
+    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
+    onFieldSubmitted: (_) => _submit(),
+    validator: validator ?? (value) => value != null && RegExp(r'^\d{4}$').hasMatch(value) ? null : 'Le PIN contient 4 chiffres.',
+    style: const TextStyle(fontSize: 22, letterSpacing: 10, fontWeight: FontWeight.w600),
+    decoration: InputDecoration(labelText: label, hintText: '••••', prefixIcon: const Icon(Icons.pin_outlined)),
+  );
+
+  Widget _emailField() => TextFormField(
+    controller: _email,
+    keyboardType: TextInputType.emailAddress,
+    autofillHints: const [AutofillHints.email],
+    textInputAction: TextInputAction.next,
+    validator: validateEmail,
+    decoration: const InputDecoration(
+      labelText: 'Adresse e-mail',
+      hintText: 'nom@exemple.sn',
+      prefixIcon: Icon(Icons.mail_outline),
+    ),
+  );
+
   Widget _nameField(TextEditingController controller, String label, String hint) => TextFormField(
     controller: controller,
     textCapitalization: TextCapitalization.words,
@@ -295,6 +515,22 @@ class _AuthScreenState extends State<AuthScreen> {
         value == null || value.trim().length < 2 ? 'Au moins 2 caractères.' : null,
     decoration: InputDecoration(labelText: label, hintText: hint),
   );
+}
+
+/// PIN à 4 chiffres, ni identiques ni qui se suivent (même règle que l'API).
+String? validatePin(String? value) {
+  if (value == null || !RegExp(r'^\d{4}$').hasMatch(value)) return 'Le PIN contient 4 chiffres.';
+  final d = value.codeUnits;
+  final identiques = d.toSet().length == 1;
+  var croissant = true;
+  var decroissant = true;
+  for (var i = 1; i < 4; i++) {
+    croissant &= d[i] - d[i - 1] == 1;
+    decroissant &= d[i - 1] - d[i] == 1;
+  }
+  return identiques || croissant || decroissant
+      ? 'Trop facile à deviner (chiffres identiques ou qui se suivent).'
+      : null;
 }
 
 // ==================== Outils de saisie (partagés avec l'invitation) ====================
@@ -403,11 +639,13 @@ class _Rond extends StatelessWidget {
   );
 }
 
-// ==================== Onglets Connexion / Inscription ====================
+// ==================== Onglets Téléphone / E-mail ====================
 
 class _ModeTabs extends StatelessWidget {
-  const _ModeTabs({required this.inscription, required this.onChanged});
-  final bool inscription;
+  const _ModeTabs({required this.gauche, required this.droite, required this.droiteActive, required this.onChanged});
+  final String gauche;
+  final String droite;
+  final bool droiteActive;
   final ValueChanged<bool> onChanged;
 
   @override
@@ -422,9 +660,9 @@ class _ModeTabs extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(child: _Onglet(titre: 'Connexion', actif: !inscription, onTap: () => onChanged(false))),
+          Expanded(child: _Onglet(titre: gauche, actif: !droiteActive, onTap: () => onChanged(false))),
           const SizedBox(width: 4),
-          Expanded(child: _Onglet(titre: 'Inscription', actif: inscription, onTap: () => onChanged(true))),
+          Expanded(child: _Onglet(titre: droite, actif: droiteActive, onTap: () => onChanged(true))),
         ],
       ),
     );

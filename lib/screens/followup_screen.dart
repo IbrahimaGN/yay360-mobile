@@ -209,7 +209,7 @@ class _EnteteSemaine extends StatelessWidget {
                 Text(trimesterLabel(followup?.trimester ?? pregnancy.trimester),
                     style: const TextStyle(color: Colors.white, fontSize: 14)),
                 if (terme != null)
-                  Text('Terme prévu : ${frenchDate(terme)}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                  Text('Terme estimé : ${frenchDate(terme)}', style: const TextStyle(color: Colors.white, fontSize: 13)),
                 if (pregnancy.atRisk) ...[
                   const SizedBox(height: 6),
                   StatusPill('Suivi renforcé', background: p.orange, foreground: p.onAccent, icon: Icons.shield_outlined),
