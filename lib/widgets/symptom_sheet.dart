@@ -12,6 +12,7 @@ const symptomes = {
   'DIMINUTION_MOUVEMENTS_BEBE': 'Le bébé bouge moins',
   'FIEVRE_ELEVEE': 'Fièvre élevée',
   'CONVULSIONS': 'Convulsions',
+  'DIFFICULTES_RESPIRATOIRES': 'Difficultés à respirer',
   'MAUX_DE_TETE_INTENSES': 'Maux de tête intenses',
   'TROUBLES_VISUELS': 'Troubles de la vue',
   'OEDEMES_SOUDAINS': 'Gonflement soudain (visage, mains)',
@@ -27,7 +28,7 @@ String niveauLabel(String? niveau) => switch (niveau) {
 };
 
 const messageUrgence =
-    'En cas d’urgence (saignements, perte de liquide, convulsions, forte fièvre…), '
+    'En cas d’urgence (saignements, perte de liquide, convulsions, difficultés à respirer, forte fièvre…), '
     'rendez-vous immédiatement dans la structure de santé la plus proche.';
 
 /// Ouvre le signalement, puis affiche la consigne renvoyée par les règles de triage.
