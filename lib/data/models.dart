@@ -6,9 +6,13 @@ class UserSession {
     required this.firstName,
     required this.lastName,
     required this.role,
+    this.refreshToken,
   });
 
   final String token;
+
+  /// Session longue (« rester connecté ») : jeton à échanger contre un nouveau à chaque ouverture.
+  final String? refreshToken;
   final int id;
   final String email;
   final String firstName;
@@ -22,6 +26,7 @@ class UserSession {
     firstName: json['prenom'] as String,
     lastName: json['nom'] as String,
     role: json['role'] as String,
+    refreshToken: json['jetonRafraichissement'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -31,7 +36,24 @@ class UserSession {
     'prenom': firstName,
     'nom': lastName,
     'role': role,
+    if (refreshToken != null) 'jetonRafraichissement': refreshToken,
   };
+}
+
+/// Réponse de l'étape « numéro de téléphone » de la connexion mobile.
+class MobileStart {
+  const MobileStart({required this.step, this.maskedEmail, this.message});
+
+  /// `PIN` (saisir le PIN), `CODE_ENVOYE` (code envoyé par e-mail) ou `INSCRIPTION` (numéro inconnu).
+  final String step;
+  final String? maskedEmail;
+  final String? message;
+
+  factory MobileStart.fromJson(Map<String, dynamic> json) => MobileStart(
+    step: json['etape'] as String? ?? 'INSCRIPTION',
+    maskedEmail: json['emailMasque'] as String?,
+    message: json['message'] as String?,
+  );
 }
 
 class Pregnancy {

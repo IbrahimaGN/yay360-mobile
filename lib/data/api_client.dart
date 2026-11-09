@@ -33,7 +33,11 @@ class ApiClient {
   final void Function()? onUnauthorized;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  Future<String?> readToken() => _storage.read(key: _tokenKey);
+  /// Session de l'appareil en mémoire. Elle n'est écrite dans le stockage sécurisé que si
+  /// l'utilisatrice a choisi « Rester connectée » (ou s'est connectée par e-mail).
+  UserSession? _memoire;
+
+  Future<String?> readToken() async => _memoire?.token ?? await _storage.read(key: _tokenKey);
 
   Future<UserSession?> readSession() async {
     final raw = await _storage.read(key: _sessionKey);
@@ -49,14 +53,56 @@ class ApiClient {
     }
   }
 
-  Future<void> saveSession(UserSession session) async {
+  Future<void> saveSession(UserSession session, {bool persist = true}) async {
+    _memoire = session;
+    if (!persist) {
+      // Session limitée à cette ouverture de l'application : rien n'est conservé sur le téléphone
+      await _storage.delete(key: _tokenKey);
+      await _storage.delete(key: _sessionKey);
+      return;
+    }
     await _storage.write(key: _tokenKey, value: session.token);
     await _storage.write(key: _sessionKey, value: jsonEncode(session.toJson()));
   }
 
   Future<void> clearSession() async {
+    _memoire = null;
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _sessionKey);
+  }
+
+  // ==================== Connexion mobile : téléphone, code par e-mail, PIN ====================
+
+  Future<MobileStart> mobileStart(String phone) async =>
+      MobileStart.fromJson(await post('/auth/mobile/demarrer', {'telephone': phone}, retry: false));
+
+  Future<MobileStart> mobileForgotPin(String phone) async =>
+      MobileStart.fromJson(await post('/auth/mobile/pin-oublie', {'telephone': phone}, retry: false));
+
+  Future<MobileStart> mobileRegister(Map<String, dynamic> values) async =>
+      MobileStart.fromJson(await post('/auth/mobile/inscription', values, retry: false));
+
+  /// Renvoie le jeton (10 minutes) qui permet de définir le PIN.
+  Future<String> mobileVerifyCode(String phone, String code) async {
+    final result = await post('/auth/mobile/verifier-code', {'telephone': phone, 'code': code}, retry: false);
+    return result['jetonPin'] as String;
+  }
+
+  Future<UserSession> mobileSetPin(String pinToken, String pin, {required bool stayConnected}) async =>
+      UserSession.fromJson(await post('/auth/mobile/pin',
+          {'jetonPin': pinToken, 'pin': pin, 'resterConnecte': stayConnected}, retry: false));
+
+  Future<UserSession> mobileLoginPin(String phone, String pin, {required bool stayConnected}) async =>
+      UserSession.fromJson(await post('/auth/mobile/connexion',
+          {'telephone': phone, 'pin': pin, 'resterConnecte': stayConnected}, retry: false));
+
+  /// Rotation : renvoie une session avec un nouveau jeton d'accès et un nouveau jeton de session.
+  Future<UserSession> mobileRefresh(String refreshToken) async =>
+      UserSession.fromJson(await post('/auth/mobile/rafraichir',
+          {'jetonRafraichissement': refreshToken}, retry: false, anonymous: true));
+
+  Future<void> mobileLogout(String refreshToken) async {
+    await post('/auth/mobile/deconnexion', {'jetonRafraichissement': refreshToken}, retry: false, anonymous: true);
   }
 
   Future<UserSession> login(String email, String password) async {
@@ -87,16 +133,22 @@ class ApiClient {
     throw const ApiException('Réponse inattendue du serveur.');
   }
 
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) =>
-      _request('POST', path, body: body);
+  Future<Map<String, dynamic>> post(
+    String path,
+    Map<String, dynamic> body, {
+    bool retry = true,
+    bool anonymous = false,
+  }) => _request('POST', path, body: body, retry: retry, anonymous: anonymous);
 
   Future<Map<String, dynamic>> _request(
     String method,
     String path, {
     Map<String, dynamic>? body,
+    bool retry = true,
+    bool anonymous = false,
   }) async {
     final uri = Uri.parse('$apiBaseUrl$path');
-    final token = await readToken();
+    final token = anonymous ? null : await readToken();
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null) headers['Authorization'] = 'Bearer $token';
 
@@ -127,6 +179,10 @@ class ApiClient {
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final message = _errorMessage(response.body);
+      if (response.statusCode == 401 && token != null && retry && await _tryRefresh()) {
+        // Jeton d'accès expiré mais session longue valide : nouvel essai avec le jeton renouvelé
+        return _request(method, path, body: body, retry: false);
+      }
       if (response.statusCode == 401 && token != null) {
         await clearSession();
         onUnauthorized?.call();
@@ -144,6 +200,19 @@ class ApiClient {
     if (decoded is List<dynamic>) return {'_list': decoded};
     if (decoded is Map<String, dynamic>) return decoded;
     throw const ApiException('Réponse inattendue du serveur.');
+  }
+
+  /// Échange le jeton de session longue contre une nouvelle session (rotation). Faux si impossible.
+  Future<bool> _tryRefresh() async {
+    final current = _memoire ?? await readSession();
+    final refreshToken = current?.refreshToken;
+    if (refreshToken == null) return false;
+    try {
+      await saveSession(await mobileRefresh(refreshToken));
+      return true;
+    } on ApiException {
+      return false;
+    }
   }
 
   String _errorMessage(String body) {

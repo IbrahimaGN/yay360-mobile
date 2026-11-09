@@ -4,8 +4,13 @@ Application Flutter pour les femmes enceintes et leur conjoint, connectée à l'
 
 ## Fonctionnalités
 
-- Inscription patiente, connexion et création du compte conjoint à partir d'une invitation.
-- Session JWT conservée dans le stockage sécurisé de l'appareil.
+- Connexion par **numéro de téléphone et PIN à 4 chiffres** :
+  - la première fois (ou en cas de « PIN oublié »), un code à 6 chiffres est envoyé à l'**adresse e-mail** du compte, puis la patiente choisit son PIN ;
+  - un numéro inconnu ouvre l'inscription (identité et e-mail), suivie du même code puis du PIN ;
+  - la connexion par e-mail et mot de passe reste disponible (onglet « E-mail »), ainsi que la création du compte conjoint à partir d'une invitation.
+- « Rester connectée » : session de 30 jours, prolongée à chaque ouverture (jeton renouvelé à chaque usage et révoqué à la déconnexion). Sans cette option, rien n'est conservé sur le téléphone.
+- Sécurité côté API : codes et PIN chiffrés ; code valable 10 minutes, 5 essais ; renvoi après 60 secondes, 5 codes par heure au maximum ; verrouillage progressif du PIN après 5 erreurs, puis nouveau code exigé ; PIN trop simples refusés (0000, 1234…).
+- Session conservée dans le stockage sécurisé de l'appareil.
 - Déclaration de grossesse et tableau de bord (semaine, date prévue, rendez-vous à venir).
 - Repères prénataux hebdomadaires, demandes de rendez-vous et signalement de symptômes.
 - Invitation du conjoint au dossier familial.
