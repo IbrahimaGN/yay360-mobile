@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../data/api_client.dart';
 import '../data/models.dart';
@@ -8,9 +11,23 @@ import '../widgets/common.dart';
 import '../widgets/symptom_sheet.dart';
 
 /// Suivi prénatal : repères de la semaine, signalement d'un symptôme et historique des signalements.
+/// Remet un fichier à l'utilisatrice (feuille de partage du système : enregistrer, ouvrir, envoyer).
+typedef PartagerFichier = Future<void> Function(Uint8List contenu, String nomFichier);
+
+Future<void> partagerAvecLeSysteme(Uint8List contenu, String nomFichier) async {
+  await SharePlus.instance.share(ShareParams(
+    files: [XFile.fromData(contenu, mimeType: 'application/pdf', name: nomFichier)],
+    fileNameOverrides: [nomFichier],
+    subject: 'Mon dossier de grossesse YAY360',
+  ));
+}
+
 class FollowupScreen extends StatefulWidget {
-  const FollowupScreen({super.key, required this.auth});
+  const FollowupScreen({super.key, required this.auth, this.partager = partagerAvecLeSysteme});
   final AuthController auth;
+
+  /// Remplaçable dans les tests (le partage passe par un canal natif).
+  final PartagerFichier partager;
 
   @override
   State<FollowupScreen> createState() => _FollowupScreenState();
@@ -24,6 +41,22 @@ class _FollowupScreenState extends State<FollowupScreen> {
   String? _error;
 
   ApiClient get _api => widget.auth.api;
+  bool _exportEnCours = false;
+
+  /// Dossier PDF de la grossesse en cours : à montrer à un soignant, il remplace le carnet égaré.
+  Future<void> _exporterDossier() async {
+    setState(() => _exportEnCours = true);
+    final messager = ScaffoldMessenger.of(context);
+    try {
+      final pdf = await _api.getBytes('/grossesses/ma-grossesse/export-pdf');
+      final jour = DateTime.now().toIso8601String().substring(0, 10);
+      await widget.partager(pdf, 'yay360-dossier-grossesse-$jour.pdf');
+    } on ApiException catch (exception) {
+      messager.showSnackBar(SnackBar(content: Text(exception.message)));
+    } finally {
+      if (mounted) setState(() => _exportEnCours = false);
+    }
+  }
   bool get _estFemme => widget.auth.session?.role == 'FEMME_ENCEINTE';
 
   @override
@@ -106,6 +139,16 @@ class _FollowupScreenState extends State<FollowupScreen> {
             _EnteteSemaine(pregnancy: _pregnancy!, followup: f),
             const SizedBox(height: 12),
             _CarteSignaler(onTap: _signaler),
+            if (_estFemme) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _exportEnCours ? null : _exporterDossier,
+                icon: _exportEnCours
+                    ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.picture_as_pdf_outlined),
+                label: Text(_exportEnCours ? 'Préparation du dossier…' : 'Mon dossier en PDF'),
+              ),
+            ],
             if (f != null) ...[
               _Groupe(titre: 'Cette semaine', fiches: [
                 _Fiche(Icons.child_care_outlined, 'Le développement du bébé', f.babyDevelopment, _Ton.teal),

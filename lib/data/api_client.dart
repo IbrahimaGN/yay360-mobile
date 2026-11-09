@@ -125,6 +125,27 @@ class ApiClient {
 
   Future<Map<String, dynamic>> get(String path) => _request('GET', path);
 
+  /// Télécharge un fichier binaire (ex. dossier PDF). Une seule tentative de renouvellement de session sur 401.
+  Future<Uint8List> getBytes(String path, {bool retry = true}) async {
+    final token = await readToken();
+    final headers = <String, String>{if (token != null) 'Authorization': 'Bearer $token'};
+    late http.Response response;
+    try {
+      response = await _client.get(Uri.parse('$apiBaseUrl$path'), headers: headers).timeout(const Duration(seconds: 60));
+    } on http.ClientException {
+      throw const ApiException('Connexion impossible. Vérifiez le réseau et l’adresse de l’API.');
+    } on TimeoutException {
+      throw const ApiException('Le serveur met trop de temps à répondre. Réessayez.');
+    }
+    if (response.statusCode == 401 && token != null && retry && await _tryRefresh()) {
+      return getBytes(path, retry: false);
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(_errorMessage(response.body), response.statusCode);
+    }
+    return response.bodyBytes;
+  }
+
   Future<List<dynamic>> getList(String path) async {
     final result = await _request('GET', path);
     if (result['_list'] is List<dynamic>) {
