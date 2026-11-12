@@ -30,6 +30,9 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Réduction et obfuscation du code (R8) : rend l'APK plus difficile à rétro-ingénierer.
+            isMinifyEnabled = true
+            isShrinkResources = true
         }
     }
 }
