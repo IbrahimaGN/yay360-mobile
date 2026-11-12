@@ -61,7 +61,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _BookingSheet(api: widget.api),
+      builder: (_) => BookingSheet(api: widget.api),
     );
     if (result == true) {
       setState(() => _historique = false);
@@ -251,15 +251,15 @@ class _AppointmentTile extends StatelessWidget {
 
 // ==================== Demande de rendez-vous ====================
 
-class _BookingSheet extends StatefulWidget {
-  const _BookingSheet({required this.api});
+class BookingSheet extends StatefulWidget {
+  const BookingSheet({super.key, required this.api});
   final ApiClient api;
 
   @override
-  State<_BookingSheet> createState() => _BookingSheetState();
+  State<BookingSheet> createState() => BookingSheetState();
 }
 
-class _BookingSheetState extends State<_BookingSheet> {
+class BookingSheetState extends State<BookingSheet> {
   static const _types = <(String, String, IconData)>[
     ('CONSULTATION_PRENATALE', 'Consultation prénatale', Icons.medical_services_outlined),
     ('ECHOGRAPHIE', 'Échographie', Icons.monitor_heart_outlined),

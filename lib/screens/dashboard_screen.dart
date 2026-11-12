@@ -75,7 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _PregnancyForm(api: widget.auth.api),
+      builder: (_) => PregnancyForm(api: widget.auth.api),
     );
     if (cree == true) _load();
   }
@@ -583,15 +583,15 @@ class _ErreurChargement extends StatelessWidget {
 
 // ==================== Déclaration de la grossesse ====================
 
-class _PregnancyForm extends StatefulWidget {
-  const _PregnancyForm({required this.api});
+class PregnancyForm extends StatefulWidget {
+  const PregnancyForm({super.key, required this.api});
   final ApiClient api;
 
   @override
-  State<_PregnancyForm> createState() => _PregnancyFormState();
+  State<PregnancyForm> createState() => PregnancyFormState();
 }
 
-class _PregnancyFormState extends State<_PregnancyForm> {
+class PregnancyFormState extends State<PregnancyForm> {
   DateTime? _period;
   int _previousPregnancies = 0;
   bool _sending = false;
