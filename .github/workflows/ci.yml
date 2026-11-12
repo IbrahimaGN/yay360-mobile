@@ -38,7 +38,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
 
       - name: Analyse statique
         run: flutter analyze
@@ -68,7 +68,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
 
       # Signé avec la clé de debug (configuration actuelle du projet) : APK de test, pas de store.
       - name: Construire l'APK
@@ -97,7 +97,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
 
       - name: Construire la version Web
         run: flutter build web --release --dart-define=API_BASE_URL=${{ vars.API_BASE_URL || 'http://localhost:8080' }}
