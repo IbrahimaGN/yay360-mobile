@@ -120,6 +120,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+
+      # Tests avec couverture (rapport lcov lu par SonarQube Cloud).
+      - name: Tests et couverture
+        run: flutter test --coverage
+
       - name: Analyse SonarQube Cloud
         uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
         env:

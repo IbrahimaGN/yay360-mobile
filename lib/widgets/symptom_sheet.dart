@@ -97,90 +97,83 @@ class _SymptomSheetState extends State<_SymptomSheet> {
   @override
   Widget build(BuildContext context) {
     final p = context.yay;
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return FeuilleModale(
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(color: p.dangerSoft, borderRadius: BorderRadius.circular(14)),
-                  child: Icon(Icons.warning_amber_rounded, color: p.danger),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Signaler un symptôme',
-                          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: p.textMain)),
-                      Text('L’équipe de santé sera prévenue.', style: TextStyle(fontSize: 13, color: p.textMuted)),
-                    ],
-                  ),
-                ),
-              ],
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(color: p.dangerSoft, borderRadius: BorderRadius.circular(14)),
+              child: Icon(Icons.warning_amber_rounded, color: p.danger),
             ),
-            const SizedBox(height: 14),
-            const YayNotice(
-              kind: NoticeKind.warning,
-              message: 'En cas d’urgence, n’attendez pas : rendez-vous immédiatement dans la structure de santé la plus proche.',
-            ),
-            const SizedBox(height: 16),
-            Text('Quel symptôme ressentez-vous ?',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textMain)),
-            const SizedBox(height: 8),
-            RadioGroup<String>(
-              groupValue: _symptom,
-              onChanged: (v) => setState(() {
-                _symptom = v;
-                _error = null;
-              }),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final e in symptomes.entries) ...[
-                    _SymptomTile(valeur: e.key, libelle: e.value, choisi: _symptom == e.key,
-                        onTap: () => setState(() {
-                              _symptom = e.key;
-                              _error = null;
-                            })),
-                    const SizedBox(height: 8),
-                  ],
+                  Text('Signaler un symptôme',
+                      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: p.textMain)),
+                  Text('L’équipe de santé sera prévenue.', style: TextStyle(fontSize: 13, color: p.textMuted)),
                 ],
               ),
             ),
-            const SizedBox(height: 4),
-            TextField(
-              controller: _description,
-              maxLines: 3,
-              maxLength: 1000,
-              decoration: const InputDecoration(
-                labelText: 'Précisions (facultatif)',
-                hintText: 'Depuis quand, intensité…',
-                alignLabelWithHint: true,
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              YayNotice(kind: NoticeKind.error, message: _error!),
-            ],
-            const SizedBox(height: 16),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: p.dangerStrong,
-                foregroundColor: p.onStrong,
-                side: BorderSide(color: p.dangerStrong, width: 1.5),
-              ),
-              onPressed: _sending ? null : _submit,
-              child: Text(_sending ? 'Transmission…' : 'Transmettre le signalement'),
-            ),
           ],
         ),
-      ),
+        const SizedBox(height: 14),
+        const YayNotice(
+          kind: NoticeKind.warning,
+          message: 'En cas d’urgence, n’attendez pas : rendez-vous immédiatement dans la structure de santé la plus proche.',
+        ),
+        const SizedBox(height: 16),
+        Text('Quel symptôme ressentez-vous ?',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textMain)),
+        const SizedBox(height: 8),
+        RadioGroup<String>(
+          groupValue: _symptom,
+          onChanged: (v) => setState(() {
+            _symptom = v;
+            _error = null;
+          }),
+          child: Column(
+            children: [
+              for (final e in symptomes.entries) ...[
+                _SymptomTile(valeur: e.key, libelle: e.value, choisi: _symptom == e.key,
+                    onTap: () => setState(() {
+                          _symptom = e.key;
+                          _error = null;
+                        })),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _description,
+          maxLines: 3,
+          maxLength: 1000,
+          decoration: const InputDecoration(
+            labelText: 'Précisions (facultatif)',
+            hintText: 'Depuis quand, intensité…',
+            alignLabelWithHint: true,
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          YayNotice(kind: NoticeKind.error, message: _error!),
+        ],
+        const SizedBox(height: 16),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: p.dangerStrong,
+            foregroundColor: p.onStrong,
+            side: BorderSide(color: p.dangerStrong, width: 1.5),
+          ),
+          onPressed: _sending ? null : _submit,
+          child: Text(_sending ? 'Transmission…' : 'Transmettre le signalement'),
+        ),
+      ],
     );
   }
 }

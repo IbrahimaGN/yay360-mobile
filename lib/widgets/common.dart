@@ -394,3 +394,21 @@ String appointmentType(String value) => switch (value) {
   'EXAMEN_LABORATOIRE' => 'Examen de laboratoire',
   _ => 'Autre rendez-vous',
 };
+
+/// Contenu d'une feuille modale de formulaire : remonte au-dessus du clavier et défile si besoin.
+class FeuilleModale extends StatelessWidget {
+  const FeuilleModale({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+      ),
+    );
+  }
+}

@@ -340,94 +340,87 @@ class _BookingSheetState extends State<_BookingSheet> {
   @override
   Widget build(BuildContext context) {
     final p = context.yay;
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return FeuilleModale(
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(color: p.tealSoft, borderRadius: BorderRadius.circular(14)),
-                  child: Icon(Icons.calendar_month_outlined, color: p.tealInk),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Demander un rendez-vous',
-                          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: p.textMain)),
-                      Text('Votre établissement confirmera la date.', style: TextStyle(fontSize: 13, color: p.textMuted)),
-                    ],
-                  ),
-                ),
-              ],
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(color: p.tealSoft, borderRadius: BorderRadius.circular(14)),
+              child: Icon(Icons.calendar_month_outlined, color: p.tealInk),
             ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: _Choix(
-                    label: 'Date souhaitée',
-                    valeur: _date == null ? null : frenchDate(_date),
-                    icone: Icons.event_outlined,
-                    onTap: _selectDate,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: _Choix(
-                    label: 'Heure',
-                    valeur: _time == null ? null : '${_time!.hour.toString().padLeft(2, '0')}h${_time!.minute.toString().padLeft(2, '0')}',
-                    icone: Icons.schedule,
-                    onTap: _selectTime,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text('Type de rendez-vous', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textMain)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final (valeur, libelle, icone) in _types)
-                  ChoiceChip(
-                    avatar: Icon(icone, size: 18, color: _type == valeur ? p.onStrong : p.tealInk),
-                    showCheckmark: false,
-                    label: Text(libelle),
-                    selected: _type == valeur,
-                    onSelected: (_) => setState(() => _type = valeur),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _reason,
-              maxLines: 2,
-              maxLength: 500,
-              decoration: const InputDecoration(labelText: 'Motif (facultatif)', alignLabelWithHint: true),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 4),
-              YayNotice(kind: NoticeKind.error, message: _error!),
-            ],
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _sending ? null : _submit,
-              child: Text(_sending ? 'Envoi…' : 'Envoyer ma demande'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Demander un rendez-vous',
+                      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: p.textMain)),
+                  Text('Votre établissement confirmera la date.', style: TextStyle(fontSize: 13, color: p.textMuted)),
+                ],
+              ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: _Choix(
+                label: 'Date souhaitée',
+                valeur: _date == null ? null : frenchDate(_date),
+                icone: Icons.event_outlined,
+                onTap: _selectDate,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 2,
+              child: _Choix(
+                label: 'Heure',
+                valeur: _time == null ? null : '${_time!.hour.toString().padLeft(2, '0')}h${_time!.minute.toString().padLeft(2, '0')}',
+                icone: Icons.schedule,
+                onTap: _selectTime,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text('Type de rendez-vous', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textMain)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final (valeur, libelle, icone) in _types)
+              ChoiceChip(
+                avatar: Icon(icone, size: 18, color: _type == valeur ? p.onStrong : p.tealInk),
+                showCheckmark: false,
+                label: Text(libelle),
+                selected: _type == valeur,
+                onSelected: (_) => setState(() => _type = valeur),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _reason,
+          maxLines: 2,
+          maxLength: 500,
+          decoration: const InputDecoration(labelText: 'Motif (facultatif)', alignLabelWithHint: true),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 4),
+          YayNotice(kind: NoticeKind.error, message: _error!),
+        ],
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: _sending ? null : _submit,
+          child: Text(_sending ? 'Envoi…' : 'Envoyer ma demande'),
+        ),
+      ],
     );
   }
 }

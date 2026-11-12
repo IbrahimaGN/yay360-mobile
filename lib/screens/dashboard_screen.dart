@@ -640,55 +640,48 @@ class _PregnancyFormState extends State<_PregnancyForm> {
   @override
   Widget build(BuildContext context) {
     final p = context.yay;
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Déclarer ma grossesse', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: p.textMain)),
-            const SizedBox(height: 4),
-            Text(
-              'La date des dernières règles suffit pour calculer votre terme et votre calendrier.',
-              style: TextStyle(color: p.textMuted, height: 1.5, fontSize: 13),
-            ),
-            const SizedBox(height: 18),
-            InkWell(
-              onTap: _selectPeriod,
-              borderRadius: BorderRadius.circular(14),
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Premier jour des dernières règles',
-                  prefixIcon: Icon(Icons.event_outlined),
-                  suffixIcon: Icon(Icons.calendar_month_outlined),
-                ),
-                isEmpty: _period == null,
-                child: Text(_period == null ? '' : frenchDate(_period), style: TextStyle(color: p.textMain, fontSize: 15)),
-              ),
-            ),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<int>(
-              initialValue: _previousPregnancies,
-              decoration: const InputDecoration(
-                labelText: 'Grossesses précédentes',
-                prefixIcon: Icon(Icons.family_restroom_outlined),
-              ),
-              items: List.generate(11, (i) => DropdownMenuItem(value: i, child: Text('$i'))),
-              onChanged: (value) => setState(() => _previousPregnancies = value ?? 0),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              YayNotice(kind: NoticeKind.error, message: _error!),
-            ],
-            const SizedBox(height: 18),
-            FilledButton(
-              onPressed: _sending ? null : _submit,
-              child: Text(_sending ? 'Enregistrement…' : 'Enregistrer ma grossesse'),
-            ),
-          ],
+    return FeuilleModale(
+      children: [
+        Text('Déclarer ma grossesse', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: p.textMain)),
+        const SizedBox(height: 4),
+        Text(
+          'La date des dernières règles suffit pour calculer votre terme et votre calendrier.',
+          style: TextStyle(color: p.textMuted, height: 1.5, fontSize: 13),
         ),
-      ),
+        const SizedBox(height: 18),
+        InkWell(
+          onTap: _selectPeriod,
+          borderRadius: BorderRadius.circular(14),
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Premier jour des dernières règles',
+              prefixIcon: Icon(Icons.event_outlined),
+              suffixIcon: Icon(Icons.calendar_month_outlined),
+            ),
+            isEmpty: _period == null,
+            child: Text(_period == null ? '' : frenchDate(_period), style: TextStyle(color: p.textMain, fontSize: 15)),
+          ),
+        ),
+        const SizedBox(height: 14),
+        DropdownButtonFormField<int>(
+          initialValue: _previousPregnancies,
+          decoration: const InputDecoration(
+            labelText: 'Grossesses précédentes',
+            prefixIcon: Icon(Icons.family_restroom_outlined),
+          ),
+          items: List.generate(11, (i) => DropdownMenuItem(value: i, child: Text('$i'))),
+          onChanged: (value) => setState(() => _previousPregnancies = value ?? 0),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          YayNotice(kind: NoticeKind.error, message: _error!),
+        ],
+        const SizedBox(height: 18),
+        FilledButton(
+          onPressed: _sending ? null : _submit,
+          child: Text(_sending ? 'Enregistrement…' : 'Enregistrer ma grossesse'),
+        ),
+      ],
     );
   }
 }
