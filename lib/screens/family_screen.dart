@@ -134,11 +134,11 @@ class _FamilyScreenState extends State<FamilyScreen> {
           ContentCard(
             child: Column(
               children: [
-                _Etape(1, 'Vous créez l’invitation', 'avec l’adresse e-mail de votre conjoint.'),
+                const _Etape(1, 'Vous créez l’invitation', 'avec l’adresse e-mail de votre conjoint.'),
                 const SizedBox(height: 12),
-                _Etape(2, 'Vous lui transmettez le code', 'par SMS ou WhatsApp, s’il n’a pas reçu d’e-mail.'),
+                const _Etape(2, 'Vous lui transmettez le code', 'par SMS ou WhatsApp, s’il n’a pas reçu d’e-mail.'),
                 const SizedBox(height: 12),
-                _Etape(3, 'Il crée son compte', 'et rejoint votre dossier familial.'),
+                const _Etape(3, 'Il crée son compte', 'et rejoint votre dossier familial.'),
               ],
             ),
           ),
