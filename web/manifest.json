@@ -1,10 +1,10 @@
 {
-    "name": "YAY360 — Votre suivi maternel",
+    "name": "YAY360 : votre suivi maternel",
     "short_name": "YAY360",
-    "start_url": "/",
+    "start_url": "./",
     "display": "standalone",
-    "background_color": "#FAFAFA",
-    "theme_color": "#E87A90",
+    "background_color": "#E6F4F5",
+    "theme_color": "#15777C",
     "description": "YAY360 accompagne les femmes enceintes et leur conjoint à chaque étape du suivi maternel.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
@@ -31,5 +31,8 @@
             "type": "image/png",
             "purpose": "maskable"
         }
-    ]
+    ],
+    "scope": "./",
+    "id": "./",
+    "lang": "fr"
 }

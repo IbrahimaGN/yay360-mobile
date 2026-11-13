@@ -21,11 +21,16 @@ class ApiClient {
     : _client = client ?? http.Client();
 
   static const _configuredApiBaseUrl = String.fromEnvironment('API_BASE_URL');
-  static final apiBaseUrl = _configuredApiBaseUrl.isNotEmpty
-      ? _configuredApiBaseUrl
-      : kIsWeb
-      ? 'http://localhost:8080'
-      : 'http://10.0.2.2:8080';
+  static final apiBaseUrl = resoudreBaseUrl(_configuredApiBaseUrl, estWeb: kIsWeb, origineWeb: kIsWeb ? Uri.base.origin : '');
+
+  /// Adresse de l'API. Une valeur relative (« /api ») n'a de sens que pour la PWA : elle vise le
+  /// relais /api du site qui l'héberge, quel que soit son nom de domaine (même origine, donc sans CORS).
+  @visibleForTesting
+  static String resoudreBaseUrl(String configuree, {required bool estWeb, required String origineWeb}) {
+    if (configuree.isEmpty) return estWeb ? 'http://localhost:8080' : 'http://10.0.2.2:8080';
+    if (configuree.startsWith('/') && estWeb) return '$origineWeb$configuree';
+    return configuree;
+  }
   static const _tokenKey = 'yay360.auth.token';
   static const _sessionKey = 'yay360.auth.session';
 
