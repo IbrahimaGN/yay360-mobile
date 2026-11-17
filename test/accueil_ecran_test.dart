@@ -69,6 +69,32 @@ void main() {
     expect(find.text('Chargement incomplet'), findsNothing, reason: 'un 404 n’est pas une erreur ici');
   });
 
+  testWidgets('déclaration de la grossesse : date choisie au calendrier, puis suivi affiché', (tester) async {
+    Map<String, dynamic>? envoye;
+    final routes = routesAccueil();
+    final grossesse = routes.remove('GET /grossesses/ma-grossesse')!; // 404 tant qu'elle n'est pas déclarée
+    routes['POST /grossesses'] = (r) {
+      envoye = jsonDecode(r.body) as Map<String, dynamic>;
+      routes['GET /grossesses/ma-grossesse'] = grossesse;
+      return reponseJson(contrat('ma_grossesse'), 201);
+    };
+    await afficher(tester, FausseApi(routes));
+
+    await tester.tap(find.text('Déclarer ma grossesse'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Premier jour des dernières règles'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('15')); // le calendrier s'ouvre sur septembre 2026, deux mois avant le 17 novembre
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enregistrer ma grossesse'));
+    await tester.pumpAndSettle();
+
+    expect(envoye, {'dateDernieresRegles': '2026-09-15', 'nombreGrossessesPrecedentes': 0});
+    expect(find.text('Votre suivi commence ici'), findsNothing);
+    expect(find.text('2e trimestre'), findsOneWidget);
+  });
+
   testWidgets('sans grossesse déclarée : le conjoint attend, sans pouvoir la déclarer', (tester) async {
     final routes = routesAccueil()..remove('GET /grossesses/ma-grossesse');
     await afficher(tester, FausseApi(routes), role: 'CONJOINT');

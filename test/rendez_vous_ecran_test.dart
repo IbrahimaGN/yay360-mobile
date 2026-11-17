@@ -1,4 +1,6 @@
 // Écran « Rendez-vous » : classement à venir / historique selon la date du jour (fixée), erreurs, formulaire.
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -93,4 +95,52 @@ void main() {
     expect(find.text('Choisissez une date et une heure.'), findsOneWidget);
     expect(fausse.appels.where((a) => a.startsWith('POST')), isEmpty);
   });
+
+  testWidgets('aujourd’hui à 9 h alors qu’il est 10 h : créneau passé refusé', (tester) async {
+    Horloge.fixer(DateTime(2026, 11, 17, 10));
+    final fausse = FausseApi({'/rendez-vous/mes-rendez-vous': (_) => reponseJson(<Object>[])});
+    await afficher(tester, fausse);
+
+    await demanderLe(tester, jour: '17');
+
+    expect(find.text('Choisissez une date et une heure dans le futur.'), findsOneWidget);
+    expect(fausse.appels.where((a) => a.startsWith('POST')), isEmpty);
+  });
+
+  testWidgets('demain à 9 h : la demande est envoyée, puis confirmée à la patiente', (tester) async {
+    Horloge.fixer(DateTime(2026, 11, 17, 10));
+    Map<String, dynamic>? envoye;
+    final fausse = FausseApi({
+      'GET /rendez-vous/mes-rendez-vous': (_) => reponseJson(<Object>[]),
+      'POST /rendez-vous': (r) {
+        envoye = jsonDecode(r.body) as Map<String, dynamic>;
+        return reponseJson({'id': 99}, 201);
+      },
+    });
+    await afficher(tester, fausse);
+
+    await demanderLe(tester, jour: '18');
+
+    expect(envoye, {'dateHeure': '2026-11-18T09:00:00', 'type': 'CONSULTATION_PRENATALE'});
+    expect(find.text('Demande envoyée : votre établissement confirmera la date.'), findsOneWidget);
+    expect(fausse.appels.where((a) => a == 'GET /rendez-vous/mes-rendez-vous'), hasLength(2),
+        reason: 'la liste est rechargée après l’envoi');
+  });
+}
+
+/// Ouvre la demande de rendez-vous, choisit le [jour] de novembre 2026 à 9 h (heure proposée), puis envoie.
+Future<void> demanderLe(WidgetTester tester, {required String jour}) async {
+  await tester.tap(find.text('Demander un rendez-vous').first);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Date souhaitée'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(jour));
+  await tester.tap(find.text('OK'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Heure'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('OK'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Envoyer ma demande'));
+  await tester.pumpAndSettle();
 }

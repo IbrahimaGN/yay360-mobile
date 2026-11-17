@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -38,8 +39,14 @@ class FausseApi {
   });
 }
 
-/// Écran affiché dans l'application, avec le thème YAY360.
-Widget appli(Widget ecran) => MaterialApp(theme: YayTheme.light, home: Scaffold(body: ecran));
+/// Écran affiché comme dans l'application : thème YAY360 et textes système en français (calendriers…).
+Widget appli(Widget ecran) => MaterialApp(
+  theme: YayTheme.light,
+  locale: const Locale('fr', 'FR'),
+  supportedLocales: const [Locale('fr', 'FR')],
+  localizationsDelegates: GlobalMaterialLocalizations.delegates,
+  home: Scaffold(body: ecran),
+);
 
 /// Taille d'un téléphone courant (400 × 900 points), assez haute pour afficher tout l'écran testé.
 void ecranTelephone(WidgetTester tester) {
