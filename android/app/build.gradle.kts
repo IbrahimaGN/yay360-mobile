@@ -33,6 +33,7 @@ android {
             // Réduction et obfuscation du code (R8) : rend l'APK plus difficile à rétro-ingénierer.
             isMinifyEnabled = true
             isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

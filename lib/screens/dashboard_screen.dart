@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/api_client.dart';
+import '../data/horloge.dart';
 import '../data/models.dart';
 import '../state/auth_controller.dart';
 import '../theme.dart';
@@ -598,7 +599,7 @@ class PregnancyFormState extends State<PregnancyForm> {
   String? _error;
 
   Future<void> _selectPeriod() async {
-    final now = DateTime.now();
+    final now = Horloge.maintenant();
     final date = await showDatePicker(
       context: context,
       initialDate: _period ?? DateTime(now.year, now.month - 2, now.day),

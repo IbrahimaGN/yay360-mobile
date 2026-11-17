@@ -1,0 +1,23 @@
+{
+  "id": 9,
+  "grossesseId": 1,
+  "femmeEnceinteId": 14,
+  "femmeEnceinteNomComplet": "Awa NDIAYE",
+  "femmeEnceinteTelephone": "+221770010013",
+  "typeSymptome": "MAUX_DE_TETE_INTENSES",
+  "description": "Maux de tête depuis ce matin. Donnée fictive de démonstration.",
+  "niveauGravite": "URGENT",
+  "statut": "NOUVELLE",
+  "professionnelNomComplet": null,
+  "resoluParNomComplet": null,
+  "notesPriseEnCharge": null,
+  "dateDeclaration": "2026-11-07T09:45:09.377594",
+  "dateResolution": null,
+  "recommandation": "Consultez en urgence un professionnel de santé ou rendez-vous immédiatement à l'établissement de santé le plus proche.",
+  "origine": "PATIENTE",
+  "justificationTriage": [
+    "Niveau de base pour « MAUX_DE_TETE_INTENSES » : ELEVE.",
+    "Signe d'alerte de prééclampsie après 20 SA (24 SA) : passage en URGENT."
+  ],
+  "avertissement": "Ces recommandations ne remplacent jamais l'avis d'un professionnel de santé."
+}

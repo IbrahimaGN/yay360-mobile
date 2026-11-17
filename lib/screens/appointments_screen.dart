@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/api_client.dart';
+import '../data/horloge.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -24,7 +25,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
 
   /// À venir : rendez-vous actifs dont l'heure n'est pas passée, du plus proche au plus lointain.
   List<Appointment> get _aVenir {
-    final maintenant = DateTime.now();
+    final maintenant = Horloge.maintenant();
     return _appointments.where((a) => _actif(a) && a.dateTime.isAfter(maintenant)).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
   }
@@ -281,7 +282,7 @@ class BookingSheetState extends State<BookingSheet> {
   }
 
   Future<void> _selectDate() async {
-    final now = DateTime.now();
+    final now = Horloge.maintenant();
     final date = await showDatePicker(
       context: context,
       initialDate: _date ?? now.add(const Duration(days: 1)),
@@ -310,7 +311,7 @@ class BookingSheetState extends State<BookingSheet> {
       return;
     }
     final quand = DateTime(d.year, d.month, d.day, t.hour, t.minute);
-    if (!quand.isAfter(DateTime.now())) {
+    if (!quand.isAfter(Horloge.maintenant())) {
       setState(() => _error = 'Choisissez une date et une heure dans le futur.');
       return;
     }

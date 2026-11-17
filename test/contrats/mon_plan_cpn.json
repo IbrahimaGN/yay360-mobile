@@ -1,0 +1,65 @@
+{
+  "grossesseId": 1,
+  "semaineActuelle": 26,
+  "contacts": [
+    {
+      "numero": 1,
+      "semaineCible": 12,
+      "dateCible": "2026-08-15",
+      "statut": "REALISE",
+      "dateRealisation": "2026-08-16"
+    },
+    {
+      "numero": 2,
+      "semaineCible": 20,
+      "dateCible": "2026-10-10",
+      "statut": "REALISE",
+      "dateRealisation": "2026-10-11"
+    },
+    {
+      "numero": 3,
+      "semaineCible": 26,
+      "dateCible": "2026-11-21",
+      "statut": "A_VENIR",
+      "dateRealisation": null
+    },
+    {
+      "numero": 4,
+      "semaineCible": 30,
+      "dateCible": "2026-12-19",
+      "statut": "A_VENIR",
+      "dateRealisation": null
+    },
+    {
+      "numero": 5,
+      "semaineCible": 34,
+      "dateCible": "2027-01-16",
+      "statut": "A_VENIR",
+      "dateRealisation": null
+    },
+    {
+      "numero": 6,
+      "semaineCible": 36,
+      "dateCible": "2027-01-30",
+      "statut": "A_VENIR",
+      "dateRealisation": null
+    },
+    {
+      "numero": 7,
+      "semaineCible": 38,
+      "dateCible": "2027-02-13",
+      "statut": "A_VENIR",
+      "dateRealisation": null
+    },
+    {
+      "numero": 8,
+      "semaineCible": 40,
+      "dateCible": "2027-02-27",
+      "statut": "A_VENIR",
+      "dateRealisation": null
+    }
+  ],
+  "nombreRealises": 2,
+  "nombreEnRetard": 0,
+  "reference": "OMS 2016 : 8 contacts prénatals (12, 20, 26, 30, 34, 36, 38 et 40 SA)"
+}

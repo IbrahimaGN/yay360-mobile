@@ -290,7 +290,9 @@ class StatusPill extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (icon != null) ...[Icon(icon, size: 14, color: foreground), const SizedBox(width: 4)],
-        Text(text, style: TextStyle(color: foreground, fontSize: 12, fontWeight: FontWeight.w600)),
+        // Flexible : avec une grande taille de texte (réglage d'accessibilité), le libellé passe à la ligne
+        // au lieu de déborder de la carte.
+        Flexible(child: Text(text, style: TextStyle(color: foreground, fontSize: 12, fontWeight: FontWeight.w600))),
       ],
     ),
   );
