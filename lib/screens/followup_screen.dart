@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../data/api_client.dart';
+import '../data/horloge.dart';
 import '../data/models.dart';
 import '../state/auth_controller.dart';
 import '../theme.dart';
@@ -49,7 +50,7 @@ class _FollowupScreenState extends State<FollowupScreen> {
     final messager = ScaffoldMessenger.of(context);
     try {
       final pdf = await _api.getBytes('/grossesses/ma-grossesse/export-pdf');
-      final jour = DateTime.now().toIso8601String().substring(0, 10);
+      final jour = Horloge.maintenant().toIso8601String().substring(0, 10);
       await widget.partager(pdf, 'yay360-dossier-grossesse-$jour.pdf');
     } on ApiException catch (exception) {
       messager.showSnackBar(SnackBar(content: Text(exception.message)));

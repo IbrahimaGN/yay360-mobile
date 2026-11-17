@@ -1,0 +1,23 @@
+{
+  "id": 1,
+  "femmeEnceinteId": 14,
+  "femmeEnceinteNomComplet": "Awa NDIAYE",
+  "dateDernieresRegles": "2026-05-23",
+  "datePrevueAccouchement": "2027-02-27",
+  "debutPeriodeTerme": "2027-02-06",
+  "finPeriodeTerme": "2027-03-12",
+  "ageGestationnelJours": 178,
+  "semaineActuelle": 26,
+  "trimestre": "T2",
+  "joursRestants": 102,
+  "statut": "EN_COURS",
+  "grossesseARisque": true,
+  "motifRisque": "Tension artérielle élevée relevée en consultation. Donnée fictive de démonstration.",
+  "nombreGrossessesPrecedentes": 1,
+  "antecedents": "Aucun antécédent particulier déclaré. Donnée fictive de démonstration.",
+  "etablissementSuiviId": 1,
+  "etablissementSuiviNom": "Hôpital Principal de Dakar",
+  "dateFin": null,
+  "issue": null,
+  "dateCreation": "2026-11-07T12:45:07.930924"
+}

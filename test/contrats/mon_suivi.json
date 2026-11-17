@@ -1,0 +1,70 @@
+{
+  "grossesseId": 1,
+  "semaineActuelle": 26,
+  "trimestre": "T2",
+  "ageGestationnelJours": 178,
+  "datePrevueAccouchement": "2027-02-27",
+  "joursRestants": 102,
+  "grossesseARisque": true,
+  "developpementBebe": "Semaine 26 : croissance rapide du fœtus, mouvements de plus en plus perceptibles.",
+  "changementsMere": "Ventre qui s'arrondit visiblement, regain d'énergie, possibles douleurs ligamentaires.",
+  "objectifsSante": "Maintenir un poids adapté, surveiller la tension artérielle et le glucose.",
+  "conseilsAlimentation": "Augmenter légèrement les apports en fer, calcium et protéines.",
+  "conseilsHydratation": "Boire régulièrement, environ 2 litres d'eau par jour.",
+  "exercicesPhysiques": "Marche, natation prénatale ou yoga adapté à la grossesse.",
+  "conseilsSommeil": "Dormir sur le côté gauche de préférence pour améliorer la circulation.",
+  "precautions": "Éviter le port de charges lourdes et les stations debout prolongées.",
+  "examensRecommandes": "Consultation prénatale de suivi et contrôle de la tension artérielle.",
+  "signesAlerte": "Diminution des mouvements du bébé, maux de tête intenses, œdèmes soudains.",
+  "conseilsPersonnalises": [
+    {
+      "id": 3,
+      "semaineDebut": 14,
+      "semaineFin": 27,
+      "trimestre": "T2",
+      "categorie": "ACTIVITE_PHYSIQUE",
+      "titre": "Bouger en toute sécurité au 2e trimestre",
+      "contenu": "La marche, la natation et le yoga prénatal sont recommandés pour maintenir une bonne forme physique sans risque pour la grossesse.",
+      "actif": true,
+      "auteurNomComplet": "Ibrahima GNINGUE",
+      "dateCreation": "2026-11-07T12:45:06.959952"
+    },
+    {
+      "id": 4,
+      "semaineDebut": 14,
+      "semaineFin": 27,
+      "trimestre": "T2",
+      "categorie": "NUTRITION",
+      "titre": "Prévenir l'anémie pendant la grossesse",
+      "contenu": "Les aliments riches en fer (viande rouge, légumineuses, légumes verts) aident à prévenir l'anémie fréquente au deuxième trimestre.",
+      "actif": true,
+      "auteurNomComplet": "Ibrahima GNINGUE",
+      "dateCreation": "2026-11-07T12:45:06.962438"
+    },
+    {
+      "id": 7,
+      "semaineDebut": 1,
+      "semaineFin": 40,
+      "trimestre": "T1",
+      "categorie": "SOMMEIL",
+      "titre": "Bien dormir pendant la grossesse",
+      "contenu": "Dormir sur le côté gauche, utiliser des coussins de soutien et éviter les écrans avant le coucher améliore la qualité du sommeil.",
+      "actif": true,
+      "auteurNomComplet": "Ibrahima GNINGUE",
+      "dateCreation": "2026-11-07T12:45:06.973223"
+    },
+    {
+      "id": 8,
+      "semaineDebut": 1,
+      "semaineFin": 40,
+      "trimestre": "T1",
+      "categorie": "PREVENTION",
+      "titre": "Ne jamais remplacer un avis médical",
+      "contenu": "Les conseils de la plateforme accompagnent le suivi mais ne remplacent jamais une consultation avec un professionnel de santé.",
+      "actif": true,
+      "auteurNomComplet": "Ibrahima GNINGUE",
+      "dateCreation": "2026-11-07T12:45:06.975706"
+    }
+  ],
+  "avertissement": "Ces recommandations ne remplacent jamais l'avis d'un professionnel de santé."
+}

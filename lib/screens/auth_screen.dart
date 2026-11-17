@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/horloge.dart';
 import '../data/models.dart';
 import '../state/auth_controller.dart';
 import '../theme.dart';
@@ -62,19 +63,19 @@ class _AuthScreenState extends State<AuthScreen> {
   });
 
   void _startResendCountdown() {
-    _resendAt = DateTime.now().add(const Duration(seconds: 60));
+    _resendAt = Horloge.maintenant().add(const Duration(seconds: 60));
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return timer.cancel();
       setState(() {});
-      if (DateTime.now().isAfter(_resendAt!)) timer.cancel();
+      if (Horloge.maintenant().isAfter(_resendAt!)) timer.cancel();
     });
   }
 
   int get _resendSeconds {
     final at = _resendAt;
     if (at == null) return 0;
-    final remaining = at.difference(DateTime.now()).inSeconds;
+    final remaining = at.difference(Horloge.maintenant()).inSeconds;
     return remaining > 0 ? remaining : 0;
   }
 
@@ -137,7 +138,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _resendCode() async => _onStart(await widget.auth.startWithPhone(_phoneValue, forgotPin: true));
 
   Future<void> _pickBirthDate() async {
-    final today = DateTime.now();
+    final today = Horloge.maintenant();
     final date = await showDatePicker(
       context: context,
       initialDate: DateTime(today.year - 25),
@@ -742,7 +743,7 @@ class _PartnerInvitationSheetState extends State<_PartnerInvitationSheet> {
   }
 
   Future<void> _selectDate() async {
-    final today = DateTime.now();
+    final today = Horloge.maintenant();
     final date = await showDatePicker(
       context: context,
       initialDate: DateTime(today.year - 30),
