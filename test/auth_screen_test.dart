@@ -45,11 +45,12 @@ void main() {
   testWidgets('accueil : connexion par téléphone, onglet e-mail et invitation du conjoint', (tester) async {
     await tester.pumpWidget(app(AuthController()));
 
-    expect(find.text('Votre grossesse,\naccompagnée avec soin.'), findsOneWidget);
+    expect(find.text('Connexion'), findsOneWidget);
+    expect(find.textContaining('Votre grossesse'), findsNothing); // plus de bandeau d'accueil
     expect(find.text('Numéro de téléphone'), findsOneWidget);
     expect(find.text('Téléphone'), findsOneWidget);
     expect(find.text('E-mail'), findsOneWidget);
-    expect(find.text('J’ai reçu une invitation de mon conjoint'), findsOneWidget);
+    expect(find.text('J’ai un code d’invitation'), findsOneWidget);
 
     await appuyer(tester, 'E-mail');
     expect(find.text('Adresse e-mail'), findsOneWidget);
