@@ -75,7 +75,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
   String _messagePret(_Invitation i) =>
       'Je t’invite à suivre ma grossesse sur YAY360. Dans l’application, touche '
-      '« J’ai un code d’invitation », puis saisis le code ${i.code} '
+      '« J’ai reçu une invitation de mon conjoint », puis saisis le code ${i.code} '
       'avec l’adresse ${i.email}. Le code est valable 72 heures.';
 
   @override

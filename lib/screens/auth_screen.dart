@@ -171,13 +171,23 @@ class _AuthScreenState extends State<AuthScreen> {
   // ==================== Textes de chaque étape ====================
 
   (String, String) get _titres {
-    if (_modeEmail) return ('Connexion', '');
+    if (_modeEmail) return ('Accédez à votre espace', 'Avec l’adresse e-mail et le mot de passe de votre compte.');
     return switch (_etape) {
-      _Etape.telephone => ('Connexion', ''),
-      _Etape.pin => ('Bon retour !', ''),
-      _Etape.inscription => ('Créez votre espace', 'Un code vous sera envoyé par e-mail.'),
-      _Etape.code => ('Vérification', 'Code envoyé à ${_maskedEmail ?? 'votre adresse e-mail'}.'),
-      _Etape.nouveauPin => ('Choisissez votre code PIN', '4 chiffres, à garder secret.'),
+      _Etape.telephone => ('Accédez à votre espace', 'Avec votre numéro de téléphone.'),
+      _Etape.pin => ('Bon retour !', 'Saisissez votre code PIN à 4 chiffres.'),
+      _Etape.inscription => (
+          'Créez votre espace',
+          'Ce numéro est nouveau. Votre code de vérification sera envoyé à votre adresse e-mail.',
+        ),
+      _Etape.code => (
+          'Vérifiez votre identité',
+          'Saisissez le code à 6 chiffres envoyé à ${_maskedEmail ?? 'votre adresse e-mail'}. '
+              'Pensez à regarder dans les courriers indésirables.',
+        ),
+      _Etape.nouveauPin => (
+          'Choisissez votre code PIN',
+          '4 chiffres, à garder secret. Évitez 0000, 1234 ou votre année de naissance.',
+        ),
     };
   }
 
@@ -219,7 +229,9 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
+                  const _Hero(),
+                  const SizedBox(height: 18),
 
                   // ── Carte du formulaire ───────────────────────────────
                   Container(
@@ -239,10 +251,8 @@ class _AuthScreenState extends State<AuthScreen> {
                             const SizedBox(height: 18),
                           ],
                           Text(titre, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: p.textMain)),
-                          if (sousTitre.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(sousTitre, style: TextStyle(fontSize: 13, color: p.textMuted, height: 1.45)),
-                          ],
+                          const SizedBox(height: 4),
+                          Text(sousTitre, style: TextStyle(fontSize: 13, color: p.textMuted, height: 1.45)),
                           const SizedBox(height: 18),
                           ..._champs(),
                           if (widget.auth.error != null) ...[
@@ -285,12 +295,18 @@ class _AuthScreenState extends State<AuthScreen> {
                     OutlinedButton.icon(
                       onPressed: _openPartnerInvitation,
                       icon: const Icon(Icons.favorite_border),
-                      label: const Text('J’ai un code d’invitation'),
+                      label: const Text('J’ai reçu une invitation de mon conjoint'),
                     ),
                   ],
+                  const SizedBox(height: 14),
+                  const YayNotice(
+                    kind: NoticeKind.info,
+                    message: 'Conjoint : utilisez le code d’invitation reçu. '
+                        'Professionnels de santé : connectez-vous sur le portail web.',
+                  ),
                   const SizedBox(height: 16),
                   Text(
-                    'Ne remplace pas l’avis d’un professionnel de santé.',
+                    'YAY360 accompagne votre suivi et ne remplace pas l’avis d’un professionnel de santé.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: p.textMuted, fontSize: 12, height: 1.5),
                   ),
@@ -458,7 +474,7 @@ class _AuthScreenState extends State<AuthScreen> {
       dense: true,
       controlAffinity: ListTileControlAffinity.leading,
       title: const Text('Rester connectée sur ce téléphone'),
-      subtitle: const Text('À éviter sur un téléphone partagé.'),
+      subtitle: const Text('30 jours, prolongés à chaque ouverture. À éviter sur un téléphone partagé.'),
     ),
   );
 
@@ -540,6 +556,88 @@ String? validatePhone(String? value) {
     return 'Format attendu : +221 77 000 00 00.';
   }
   return null;
+}
+
+// ==================== Bandeau d'accueil ====================
+
+class _Hero extends StatelessWidget {
+  const _Hero();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.yay;
+    // Dégradé foncé : le texte blanc garde au moins 4,5:1 partout
+    final fin = Color.lerp(p.banner1, Colors.black, 0.25)!;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [p.banner1, fin],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Décor
+            Positioned(right: -30, top: -40, child: _Rond(130, Colors.white.withValues(alpha: 0.10))),
+            Positioned(right: 26, bottom: -26, child: _Rond(64, p.orange.withValues(alpha: 0.9))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+                    ),
+                    child: const Text(
+                      'Santé maternelle · Sénégal',
+                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Votre grossesse,\naccompagnée avec soin.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 25,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Padding(
+                    padding: EdgeInsets.only(right: 70),
+                    child: Text(
+                      'Des repères utiles, un suivi organisé et vos proches à vos côtés.',
+                      style: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Rond extends StatelessWidget {
+  const _Rond(this.taille, this.couleur);
+  final double taille;
+  final Color couleur;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Container(width: taille, height: taille, decoration: BoxDecoration(color: couleur, shape: BoxShape.circle)),
+  );
 }
 
 // ==================== Onglets Téléphone / E-mail ====================
